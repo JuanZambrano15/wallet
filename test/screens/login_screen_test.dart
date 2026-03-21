@@ -1,8 +1,8 @@
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:to_do_ufpso/screens/home_screen.dart';
-import 'package:to_do_ufpso/screens/login_screen.dart';
+import 'package:wallet/screens/home_screen.dart';
+import 'package:wallet/screens/login_screen.dart';
 
 void main() {
   testWidgets('LoginScreen valida campos, muestra loading y navega a home', (

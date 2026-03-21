@@ -1,7 +1,7 @@
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:flutter/material.dart';
-import 'package:to_do_ufpso/utils/app_theme.dart';
-import 'package:to_do_ufpso/utils/validators.dart';
+import 'package:wallet/utils/app_theme.dart';
+import 'package:wallet/utils/validators.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});

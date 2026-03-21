@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:to_do_ufpso/utils/app_theme.dart';
-import 'package:to_do_ufpso/utils/validators.dart';
+import 'package:wallet/utils/app_theme.dart';
+import 'package:wallet/utils/validators.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});

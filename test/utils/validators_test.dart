@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:to_do_ufpso/utils/validators.dart';
+import 'package:wallet/utils/validators.dart';
 
 void main() {
   group('Validators Test', () {

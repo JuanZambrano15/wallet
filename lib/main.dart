@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:to_do_ufpso/screens/home_screen.dart';
-import 'package:to_do_ufpso/screens/login_screen.dart';
-import 'package:to_do_ufpso/screens/register_screen.dart';
-import 'package:to_do_ufpso/utils/app_theme.dart';
+import 'package:wallet/screens/home_screen.dart';
+import 'package:wallet/screens/login_screen.dart';
+import 'package:wallet/screens/register_screen.dart';
+import 'package:wallet/utils/app_theme.dart';
 
 void main() {
   runApp(const MyApp());

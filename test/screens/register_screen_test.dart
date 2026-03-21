@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:to_do_ufpso/screens/register_screen.dart';
+import 'package:wallet/screens/register_screen.dart';
 
 void main() {
   testWidgets('RegisterScreen UI test', (WidgetTester tester) async {
