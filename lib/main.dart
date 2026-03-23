@@ -14,7 +14,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'To-Do UFPSO',
+      title: 'Wallet',
       theme: AppTheme.light(),
       initialRoute: '/login',
       routes: {
