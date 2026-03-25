@@ -1,3 +1,4 @@
+import 'package:bcrypt/bcrypt.dart';
 import 'package:wallet/config/configDB.dart';
 import 'package:wallet/models/user.dart';
 
@@ -12,10 +13,15 @@ class AuthService {
   }) async {
     final docRef = _db.collection('users').doc();
 
+    final hashedPassword = BCrypt.hashpw(
+      password,
+      BCrypt.gensalt(logRounds: 12),
+    );
+
     final newUser = UserModel(
       id: docRef.id,
       email: email.trim(),
-      password: password,
+      password: hashedPassword,
       nameUser: nameUser.trim(),
     );
 
