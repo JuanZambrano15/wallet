@@ -60,11 +60,7 @@ class _LoginScreenState extends State<LoginScreen> {
           shape: const CircleBorder(),
           padding: EdgeInsets.zero,
         ),
-        child: Semantics(
-          label: semanticLabel,
-          button: true,
-          child: icon,
-        ),
+        child: Semantics(label: semanticLabel, button: true, child: icon),
       ),
     );
   }
@@ -72,9 +68,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Iniciar Sesion'),
-      ),
+      appBar: AppBar(title: const Text('Iniciar Sesion')),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -86,7 +80,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   const Text(
-                    'To-Do UFPSO',
+                    'Wallet',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 32,
