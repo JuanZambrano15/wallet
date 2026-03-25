@@ -1,29 +1,39 @@
 import 'package:flutter/material.dart';
 
 class AppColors {
-  static const Color primary = Color.fromRGBO(188, 0, 23, 1);
-  static const Color black = Color.fromRGBO(0, 0, 0, 1);
-  static const Color gray = Color.fromRGBO(129, 131, 134, 1);
-  static const Color gray50 = Color.fromRGBO(129, 131, 134, 0.5);
-  static const Color surface = Color.fromRGBO(250, 250, 250, 1);
+  static const Color primary = Color(0xFF004F39); // Verde bosque
+  static const Color accent = Color(
+    0xFFFFFFCA,
+  ); // Crema — texto principal y highlights
+  static const Color background = Color(0xFF151613); // Fondo casi negro
+  static const Color surface = Color(
+    0xFF1F2220,
+  ); // Superficie elevada (cards, inputs)
+  static const Color gray = Color(0xFF7A8C82); // Gris verdoso apagado
+  static const Color gray50 = Color(
+    0x407A8C82,
+  ); // Gris al 25% para bordes sutiles
+  static const Color error = Color(
+    0xFFB5543A,
+  ); // Rojo-tierra (no choca con el verde)
 }
 
 class AppTheme {
-  static ThemeData light() {
-    const colorScheme = ColorScheme.light(
+  static ThemeData dark() {
+    const colorScheme = ColorScheme.dark(
       primary: AppColors.primary,
-      onPrimary: Colors.white,
-      secondary: AppColors.black,
-      onSecondary: Colors.white,
-      surface: Colors.white,
-      onSurface: AppColors.black,
-      error: AppColors.primary,
-      onError: Colors.white,
+      onPrimary: AppColors.accent,
+      secondary: AppColors.accent,
+      onSecondary: AppColors.background,
+      surface: AppColors.surface,
+      onSurface: AppColors.accent,
+      error: AppColors.error,
+      onError: AppColors.accent,
     );
 
-    final baseTextTheme = Typography.material2021().black.apply(
-      bodyColor: AppColors.black,
-      displayColor: AppColors.black,
+    final baseTextTheme = Typography.material2021().white.apply(
+      bodyColor: AppColors.accent,
+      displayColor: AppColors.accent,
       fontFamily: 'Trebuchet MS',
       fontFamilyFallback: const ['Helvetica'],
     );
@@ -31,23 +41,21 @@ class AppTheme {
     return ThemeData(
       useMaterial3: true,
       colorScheme: colorScheme,
-      scaffoldBackgroundColor: AppColors.surface,
+      scaffoldBackgroundColor: AppColors.background,
       fontFamily: 'Trebuchet MS',
       textTheme: baseTextTheme.copyWith(
         bodyMedium: baseTextTheme.bodyMedium?.copyWith(color: AppColors.gray),
-        labelMedium: baseTextTheme.labelMedium?.copyWith(
-          color: AppColors.gray,
-        ),
+        labelMedium: baseTextTheme.labelMedium?.copyWith(color: AppColors.gray),
       ),
       appBarTheme: const AppBarTheme(
-        backgroundColor: Colors.white,
-        foregroundColor: AppColors.black,
+        backgroundColor: AppColors.background,
+        foregroundColor: AppColors.accent,
         elevation: 0,
         centerTitle: true,
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: Colors.white,
+        fillColor: AppColors.surface,
         labelStyle: const TextStyle(color: AppColors.gray),
         prefixIconColor: AppColors.gray,
         contentPadding: const EdgeInsets.symmetric(
@@ -68,17 +76,18 @@ class AppTheme {
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: AppColors.primary),
+          borderSide: const BorderSide(color: AppColors.error),
         ),
         focusedErrorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+          borderSide: const BorderSide(color: AppColors.error, width: 1.5),
         ),
+        errorStyle: const TextStyle(color: AppColors.error),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.primary,
-          foregroundColor: Colors.white,
+          foregroundColor: AppColors.accent,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
@@ -87,12 +96,13 @@ class AppTheme {
             fontWeight: FontWeight.w700,
             fontSize: 18,
           ),
+          elevation: 0,
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.black,
-          side: const BorderSide(color: AppColors.gray50),
+          foregroundColor: AppColors.accent,
+          side: const BorderSide(color: AppColors.gray50, width: 1.5),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
@@ -109,7 +119,7 @@ class AppTheme {
       ),
       floatingActionButtonTheme: const FloatingActionButtonThemeData(
         backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
+        foregroundColor: AppColors.accent,
       ),
     );
   }

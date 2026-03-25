@@ -1,4 +1,3 @@
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wallet/screens/home_screen.dart';
@@ -30,7 +29,10 @@ void main() {
     await tester.tap(find.text('Ingresar'));
     await tester.pump();
 
-    expect(find.text('Por favor, ingrese su correo electrónico'), findsOneWidget);
+    expect(
+      find.text('Por favor, ingrese su correo electrónico'),
+      findsOneWidget,
+    );
     expect(find.text('Por favor, ingrese una contraseña'), findsOneWidget);
 
     await tester.enterText(find.byType(TextFormField).first, 'correo_invalido');
@@ -39,7 +41,10 @@ void main() {
     await tester.pump();
 
     expect(find.text('Por favor, ingrese un correo válido'), findsOneWidget);
-    expect(find.text('La contraseña debe tener mínimo 6 caracteres'), findsOneWidget);
+    expect(
+      find.text('La contraseña debe tener mínimo 6 caracteres'),
+      findsOneWidget,
+    );
 
     await tester.enterText(
       find.byType(TextFormField).first,

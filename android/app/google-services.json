@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "469142840204",
+    "project_id": "project-wallet-ufpso",
+    "storage_bucket": "project-wallet-ufpso.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:469142840204:android:ad9df591448a0bb021eca9",
+        "android_client_info": {
+          "package_name": "com.example.to_do_ufpso"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC6WCH9ENpuT0Z51Gvw3DIDeniwH5gW7iU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
