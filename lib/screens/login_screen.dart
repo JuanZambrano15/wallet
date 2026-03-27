@@ -129,7 +129,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 24),
                   const Text(
-                    'O continua con',
+                    'O inicia con',
                     textAlign: TextAlign.center,
                     style: TextStyle(color: AppColors.gray),
                   ),
@@ -145,7 +145,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       _buildSocialButton(
                         icon: const FaIcon(FontAwesomeIcons.github),
-                        semanticLabel: 'GitHub',
+                        semanticLabel: 'Git Hub',
                       ),
                       _buildSocialButton(
                         icon: const FaIcon(FontAwesomeIcons.facebookF),
@@ -157,7 +157,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Text('¿No tienes una cuenta? '),
+                      const Text('¿No tienes una cuenta?'),
                       TextButton(
                         onPressed: _isLoading
                             ? null
@@ -172,7 +172,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         ),
                         child: const Text(
-                          'Registrate gratis',
+                          'Registrate',
                           style: TextStyle(fontWeight: FontWeight.bold),
                         ),
                       ),
