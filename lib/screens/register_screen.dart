@@ -138,7 +138,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Empieza a gestionar tu dinero\nde forma inteligente.',
+                  'Gestiona tu dinero\nde forma inteligente.',
                   style: TextStyle(
                     fontSize: 14,
                     color: AppColors.gray,
