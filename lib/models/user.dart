@@ -18,4 +18,13 @@ class UserModel {
       'nameUser': nameUser,
     };
   }
+
+  factory UserModel.fromMap(Map<String, dynamic> map) {
+    return UserModel(
+      id: map['id'] ?? '',
+      email: map['email'] ?? '',
+      password: map['password'] ?? '',
+      nameUser: map['nameUser'] ?? '',
+    );
+  }
 }
