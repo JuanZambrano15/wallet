@@ -13,7 +13,7 @@ class AuthService {
 
   // Configuración de Google para Web
   final GoogleSignIn _googleSignIn = GoogleSignIn(
-    clientId: "469142840204-55uc08gq2gabtpj8v5av78m44m1a5h11.apps.googleusercontent.com",
+    clientId: "", //Esta en la configuracion de firebase, colocar en web/index.html en el meta name="google-signin-client_id" content="TU_CLIENT_ID.apps.googleusercontent.com"
   );
 
   // --- GENERACIÓN DE TOKEN ---
@@ -62,7 +62,6 @@ class AuthService {
     await _generateAndSaveToken(docRef.id);
   }
 
-  // --- LOGIN MANUAL ---
   Future<void> loginWithEmail(String email, String password) async {
     final query = await _db
         .collection('users')
@@ -79,7 +78,6 @@ class AuthService {
     await _generateAndSaveToken(user.id);
   }
 
-  // --- GOOGLE SIGN IN ---
   Future<void> signInWithGoogle() async {
     final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
     if (googleUser == null) return;
@@ -95,7 +93,6 @@ class AuthService {
     await _syncSocialUser(userCredential.user!);
   }
 
-  // --- GITHUB SIGN IN (Corregido: Ahora dentro de la clase) ---
   Future<void> signInWithGithub() async {
     try {
       GithubAuthProvider githubProvider = GithubAuthProvider();
@@ -111,7 +108,6 @@ class AuthService {
     }
   }
 
-  // --- SINCRONIZACIÓN CON FIRESTORE ---
   Future<void> _syncSocialUser(User firebaseUser) async {
     final email = firebaseUser.email!;
     final query = await _db
@@ -127,7 +123,7 @@ class AuthService {
         'id': userId,
         'email': email,
         'nameUser': firebaseUser.displayName ?? '',
-        'password': '', // Los usuarios sociales no tienen password manual
+        'password': '', 
       });
     } else {
       userId = query.docs.first.id;
@@ -135,7 +131,6 @@ class AuthService {
     await _generateAndSaveToken(userId);
   }
 
-  // --- HELPERS ---
   Future<bool> isTokenValid() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('tokenAuth');
