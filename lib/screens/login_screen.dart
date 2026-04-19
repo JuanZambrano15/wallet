@@ -2,6 +2,7 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:wallet/utils/app_theme.dart';
 import 'package:wallet/utils/validators.dart';
+import 'package:wallet/services/auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -25,37 +26,86 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  final _authService = AuthService();
+
   Future<void> _login() async {
-    if (!_formKey.currentState!.validate()) {
-      return;
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _isLoading = true);
+
+    try {
+      await _authService.loginWithEmail(
+        _emailController.text,
+        _passwordController.text,
+      );
+      if (mounted) Navigator.pushReplacementNamed(context, '/home');
+    } catch (e) {
+      if (mounted) _showErrorSnackbar(AuthService.parseError(e.toString()));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
+  }
 
-    setState(() {
-      _isLoading = true;
-    });
+  void _showErrorSnackbar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(
+              Icons.error_outline_rounded,
+              color: AppColors.accent,
+              size: 20,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(
+                  color: AppColors.accent,
+                  fontFamily: 'Trebuchet MS',
+                ),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: AppColors.error,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
+  }
 
-    await Future.delayed(const Duration(seconds: 1));
-
-    if (!mounted) {
-      return;
+  void _loginWithGoogle() async {
+    try {
+      await _authService.signInWithGoogle();
+      if (mounted) Navigator.pushReplacementNamed(context, '/home');
+    } catch (e) {
+      print(e);
     }
+  }
 
-    setState(() {
-      _isLoading = false;
-    });
-
-    Navigator.of(context).pushReplacementNamed('/home');
+  void _loginWithGithub() async {
+    setState(() => _isLoading = true);
+    try {
+      await _authService.signInWithGithub();
+      if (mounted) Navigator.pushReplacementNamed(context, '/home');
+    } catch (e) {
+      if (mounted) _showErrorSnackbar("Error al conectar con GitHub");
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   Widget _buildSocialButton({
     required Widget icon,
     required String semanticLabel,
+    required VoidCallback onTap,
   }) {
     return SizedBox(
       width: 52,
       height: 52,
       child: OutlinedButton(
-        onPressed: () {},
+        onPressed: _isLoading ? null : onTap,
         style: OutlinedButton.styleFrom(
           shape: const CircleBorder(),
           padding: EdgeInsets.zero,
@@ -142,14 +192,12 @@ class _LoginScreenState extends State<LoginScreen> {
                       _buildSocialButton(
                         icon: const FaIcon(FontAwesomeIcons.google),
                         semanticLabel: 'Google',
+                        onTap: _loginWithGoogle,
                       ),
                       _buildSocialButton(
                         icon: const FaIcon(FontAwesomeIcons.github),
                         semanticLabel: 'Git Hub',
-                      ),
-                      _buildSocialButton(
-                        icon: const FaIcon(FontAwesomeIcons.facebookF),
-                        semanticLabel: 'Facebook',
+                        onTap: _loginWithGithub,
                       ),
                     ],
                   ),

@@ -12,6 +12,7 @@ class RegisterScreen extends StatefulWidget {
 
 class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
@@ -23,6 +24,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   void dispose() {
+    _nameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
@@ -38,10 +40,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
       await _authService.registerWithEmail(
         email: _emailController.text,
         password: _passwordController.text,
-        nameUser: '',
+        nameUser: _nameController.text,
       );
 
-      if (mounted) Navigator.of(context).pushReplacementNamed('/home');
+      if (mounted) {
+        Navigator.of(
+          context,
+        ).pushNamedAndRemoveUntil('/home', (route) => false);
+      }
     } catch (e) {
       if (mounted) _showErrorSnackbar(AuthService.parseError(e.toString()));
     } finally {
@@ -148,6 +154,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ),
 
                 const SizedBox(height: 36),
+
+                // Campo de Nombre
+                TextFormField(
+                  controller: _nameController,
+                  style: const TextStyle(color: AppColors.accent),
+                  decoration: const InputDecoration(
+                    labelText: 'Nombre Completo',
+                    prefixIcon: Icon(Icons.person_outline_rounded),
+                  ),
+                  validator: (value) =>
+                      value!.isEmpty ? 'Ingresa tu nombre' : null,
+                ),
+                const SizedBox(height: 16),
 
                 // Email
                 TextFormField(
