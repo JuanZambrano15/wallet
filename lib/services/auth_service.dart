@@ -11,9 +11,9 @@ class AuthService {
   final _auth = FirebaseAuth.instance;
   final String _jwtSecret = "WalletSecretKey2026";
 
-  // Configuración de Google para Web
+
   final GoogleSignIn _googleSignIn = GoogleSignIn(
-    clientId: "", //Esta en la configuracion de firebase, colocar en web/index.html en el meta name="google-signin-client_id" content="TU_CLIENT_ID.apps.googleusercontent.com"
+    clientId: "", 
   );
 
   // --- GENERACIÓN DE TOKEN ---
