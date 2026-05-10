@@ -4,6 +4,7 @@ import 'package:wallet/screens/login_screen.dart';
 import 'package:wallet/screens/register_screen.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:wallet/services/auth_service.dart';
+import 'package:wallet/screens/sourceIncome_screen.dart';
 import 'package:wallet/utils/app_theme.dart';
 import 'firebase_options.dart';
 
@@ -31,6 +32,7 @@ class MyApp extends StatelessWidget {
         '/register': (context) => const RegisterScreen(),
         '/login': (context) => const LoginScreen(),
         '/home': (context) => const HomeScreen(),
+        '/income-sources': (context) => const IncomeSourcesScreen(),
       },
     );
   }
