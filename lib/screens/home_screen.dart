@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:firebase_auth/firebase_auth.dart';       // ← nuevo
+import 'package:cloud_firestore/cloud_firestore.dart';   // ← nuevo
 import '../../utils/app_theme.dart';
 import '../screens/sourceIncome_screen.dart';
 import '../screens/expenseCategories_screen.dart';
+import '../screens/add_income_screen.dart';               // ← nuevo
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -15,6 +18,70 @@ class _HomeScreenState extends State<HomeScreen> {
   int _selectedNav = 0;
   int _selectedPeriod = 0;
   final List<String> _periods = ['Este mes', 'Semana', 'Año'];
+
+  // ── CAMBIO 1: estado para nombre e ingresos ──────────────────
+  String _firstName = '';
+  double _totalIncome = 0;
+  bool _loadingUserData = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserData();
+  }
+
+  Future<void> _loadUserData() async {
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null) return;
+
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .get();
+
+      // Extrae el primer nombre del campo 'name' o 'displayName'
+      final rawName = (doc.data()?['nameUser'] ??
+        FirebaseAuth.instance.currentUser?.displayName ??
+        '') as String;
+      final firstName = rawName.trim().split(' ').first;
+
+      // Suma todos los ingresos del usuario
+      final incomesSnap = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .collection('incomes')
+          .get();
+
+      double total = 0;
+      for (final doc in incomesSnap.docs) {
+        total += (doc.data()['amount'] as num? ?? 0).toDouble();
+      }
+
+      if (mounted) {
+        setState(() {
+          _firstName = firstName;
+          _totalIncome = total;
+          _loadingUserData = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loadingUserData = false);
+    }
+  }
+
+  /// Formatea un double como pesos colombianos: $3,200,000
+  String _formatCurrency(double amount) {
+    final parts = amount.toStringAsFixed(0).split('');
+    final buffer = StringBuffer();
+    int count = 0;
+    for (int i = parts.length - 1; i >= 0; i--) {
+      if (count > 0 && count % 3 == 0) buffer.write(',');
+      buffer.write(parts[i]);
+      count++;
+    }
+    return '\$${buffer.toString().split('').reversed.join()}';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -138,7 +205,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // ── GREETING ─────────────────────────────────────────────────
+  // ── GREETING — CAMBIO 2: primer nombre dinámico ──────────────
   Widget _buildGreeting() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -153,9 +220,11 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
         const SizedBox(height: 4),
-        const Text(
-          'Hola, Daniel 👋',
-          style: TextStyle(
+        Text(
+          _loadingUserData
+              ? 'Hola 👋'
+              : 'Hola, ${_firstName.isNotEmpty ? _firstName : 'tú'} 👋',
+          style: const TextStyle(
             fontSize: 22,
             color: AppColors.accent,
             fontWeight: FontWeight.w400,
@@ -165,7 +234,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // ── BALANCE CARD ─────────────────────────────────────────────
+  // ── BALANCE CARD — CAMBIO 3: total ingresos dinámico ─────────
   Widget _buildBalanceCard() {
     return Container(
       width: double.infinity,
@@ -188,9 +257,9 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
           const SizedBox(height: 6),
-          const Text(
-            '\$1,240,500',
-            style: TextStyle(
+          Text(
+            '\$1,240,500', // balance neto: mantén tu lógica actual
+            style: const TextStyle(
               fontSize: 36,
               color: AppColors.accent,
               fontWeight: FontWeight.w300,
@@ -201,7 +270,9 @@ class _HomeScreenState extends State<HomeScreen> {
           Row(
             children: [
               _statPill(
-                '+\$3,200,000',
+                _loadingUserData
+                    ? '+\$—'
+                    : '+${_formatCurrency(_totalIncome)}',   // ← dinámico
                 Icons.arrow_upward_rounded,
                 isIncome: true,
               ),
@@ -243,12 +314,12 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // ── QUICK ACTIONS ────────────────────────────────────────────
+  // ── QUICK ACTIONS — CAMBIO 4: botón Ingreso abre la pantalla ─
   Widget _buildQuickActions() {
     final actions = [
-      {'icon': Icons.add_rounded, 'label': 'Ingreso'},
-      {'icon': Icons.remove_rounded, 'label': 'Gasto'},
-      {'icon': Icons.track_changes_rounded, 'label': 'Meta'},
+      {'icon': Icons.add_rounded,            'label': 'Ingreso'},
+      {'icon': Icons.remove_rounded,         'label': 'Gasto'},
+      {'icon': Icons.track_changes_rounded,  'label': 'Meta'},
       {'icon': Icons.pie_chart_outline_rounded, 'label': 'Reportes'},
     ];
     return Row(
@@ -267,7 +338,17 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _actionBtn(IconData icon, String label) {
     return GestureDetector(
-      onTap: () {},
+      onTap: () async {
+        if (label == 'Ingreso') {
+          // Abre AddIncomeScreen y recarga datos si se guardó algo
+          final saved = await Navigator.push<bool>(
+            context,
+            MaterialPageRoute(builder: (_) => const AddIncomeScreen()),
+          );
+          if (saved == true) _loadUserData();
+        }
+        // Los demás botones mantienen su onTap vacío por ahora
+      },
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
@@ -367,8 +448,6 @@ class _HomeScreenState extends State<HomeScreen> {
             child: _sourceItem(s),
           ),
         ),
-
-        // ── Botón "Agregar fuente" → navega a IncomeSourcesScreen ──
         GestureDetector(
           onTap: () => Navigator.push(
             context,
@@ -407,11 +486,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // En home_screen.dart — reemplaza _buildCategoriesWidget() completo
-
   Widget _buildCategoriesWidget() {
-    // Preview combinado: sistema + personalizadas del usuario
-    // Cuando integres el servicio real, reemplaza esta lista
     final categories = [
       {'emoji': '🏠', 'name': 'Vivienda'},
       {'emoji': '🍔', 'name': 'Alimentación'},
@@ -424,7 +499,6 @@ class _HomeScreenState extends State<HomeScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // ── Scroll horizontal ──────────────────────────────────
         SizedBox(
           height: 86,
           child: ListView.separated(
@@ -439,8 +513,6 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
         const SizedBox(height: 10),
-
-        // ── Botón gestionar ────────────────────────────────────
         GestureDetector(
           onTap: () => Navigator.push(
             context,
@@ -478,7 +550,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // ── Tarjeta individual del scroll ──────────────────────────
   Widget _categoryCard({required String emoji, required String name}) {
     return Container(
       width: 68,

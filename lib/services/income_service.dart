@@ -1,138 +1,122 @@
 // lib/services/income_service.dart
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/income_model.dart';
+import '../models/sourceIncome.dart';
 
 class IncomeService {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _db = FirebaseFirestore.instance;
 
-  // ─── Helpers ──────────────────────────────────────────────────────────────
+  CollectionReference get _collection => _db.collection('incomes');
 
-  /// Returns the currently authenticated user's UID.
-  /// Throws [Exception] if no user is signed in.
-  String get _uid {
-    final user = _auth.currentUser;
-    if (user == null) throw Exception('No authenticated user found.');
-    return user.uid;
+  // ─── Mismo patrón que SourceIncomeService ─────────────────────────────────
+
+  Future<String> _getCurrentUserId() async {
+    final prefs = await SharedPreferences.getInstance();
+    final userId = prefs.getString('userId') ?? '';
+    if (userId.isEmpty) throw Exception('Usuario no autenticado');
+    return userId;
   }
 
-  /// Base collection reference for this user's incomes.
-  CollectionReference<Map<String, dynamic>> get _incomesRef =>
-      _firestore.collection('users').doc(_uid).collection('incomes');
+  // ─── CRUD de ingresos ─────────────────────────────────────────────────────
 
-  /// Base collection reference for this user's income sources.
-  CollectionReference<Map<String, dynamic>> get _sourcesRef =>
-      _firestore.collection('users').doc(_uid).collection('incomeSources');
+  Future<Income> addIncome({
+    required double amount,
+    required DateTime date,
+    required String sourceId,
+    String description = '',
+  }) async {
+    final userId = await _getCurrentUserId();
 
-  // ─── Income CRUD ──────────────────────────────────────────────────────────
+    final docRef = _collection.doc();
+    final income = Income(
+      id: docRef.id,
+      userId: userId,
+      amount: amount,
+      date: date,
+      sourceId: sourceId,
+      description: description.trim(),
+    );
 
-  /// Saves a new [Income] to Firestore and returns the generated document ID.
-  Future<String> addIncome(Income income) async {
-    try {
-      final docRef = await _incomesRef.add(income.toMap());
-      return docRef.id;
-    } on FirebaseException catch (e) {
-      throw Exception('Failed to save income: ${e.message}');
-    }
+    await docRef.set(income.toMap());
+    return income;
   }
 
-  /// Updates an existing [Income] in Firestore.
-  /// The [income] must have a non-null [id].
-  Future<void> updateIncome(Income income) async {
-    if (income.id == null) {
-      throw ArgumentError('Income id must not be null for an update operation.');
-    }
-    try {
-      await _incomesRef.doc(income.id).update(income.toMap());
-    } on FirebaseException catch (e) {
-      throw Exception('Failed to update income: ${e.message}');
-    }
+  Future<List<Income>> getIncomesByUser() async {
+    final userId = await _getCurrentUserId();
+
+    final snapshot = await _collection
+        .where('userId', isEqualTo: userId)
+        .orderBy('date', descending: true)
+        .get();
+
+    return snapshot.docs
+        .map((doc) => Income.fromMap(doc.data() as Map<String, dynamic>))
+        .toList();
   }
 
-  /// Deletes an income by its [id].
-  Future<void> deleteIncome(String id) async {
-    try {
-      await _incomesRef.doc(id).delete();
-    } on FirebaseException catch (e) {
-      throw Exception('Failed to delete income: ${e.message}');
-    }
-  }
-
-  /// Returns a real-time stream of all incomes, ordered by date descending.
-  Stream<List<Income>> watchIncomes() {
-    return _incomesRef
+  Stream<List<Income>> streamIncomesByUser(String userId) {
+    return _collection
+        .where('userId', isEqualTo: userId)
         .orderBy('date', descending: true)
         .snapshots()
         .map((snapshot) => snapshot.docs
-            .map((doc) => Income.fromMap(doc.data(), doc.id))
+            .map((doc) => Income.fromMap(doc.data() as Map<String, dynamic>))
             .toList());
   }
 
-  /// Fetches all incomes once (one-time read).
-  Future<List<Income>> fetchIncomes() async {
-    try {
-      final snapshot =
-          await _incomesRef.orderBy('date', descending: true).get();
-      return snapshot.docs
-          .map((doc) => Income.fromMap(doc.data(), doc.id))
-          .toList();
-    } on FirebaseException catch (e) {
-      throw Exception('Failed to fetch incomes: ${e.message}');
-    }
+  Future<Income?> getIncomeById(String id) async {
+    final doc = await _collection.doc(id).get();
+    if (!doc.exists) return null;
+    return Income.fromMap(doc.data() as Map<String, dynamic>);
   }
 
-  // ─── Income Sources ────────────────────────────────────────────────────────
-
-  /// Fetches all income sources for the current user.
-  /// If none exist, returns a list containing the default [IncomeSource.general].
-  Future<List<IncomeSource>> fetchIncomeSources() async {
-    try {
-      final snapshot = await _sourcesRef.orderBy('name').get();
-
-      if (snapshot.docs.isEmpty) {
-        // Ensure the default source exists in Firestore.
-        await _ensureDefaultSourceExists();
-        return [IncomeSource.general];
-      }
-
-      return snapshot.docs
-          .map((doc) => IncomeSource.fromMap(doc.data(), doc.id))
-          .toList();
-    } on FirebaseException catch (e) {
-      throw Exception('Failed to fetch income sources: ${e.message}');
-    }
-  }
-
-  /// Returns a real-time stream of income sources.
-  Stream<List<IncomeSource>> watchIncomeSources() {
-    return _sourcesRef.orderBy('name').snapshots().map((snapshot) {
-      if (snapshot.docs.isEmpty) return [IncomeSource.general];
-      return snapshot.docs
-          .map((doc) => IncomeSource.fromMap(doc.data(), doc.id))
-          .toList();
+  Future<void> updateIncome({
+    required String id,
+    required double amount,
+    required DateTime date,
+    required String sourceId,
+    String description = '',
+  }) async {
+    await _collection.doc(id).update({
+      'amount': amount,
+      'date': Timestamp.fromDate(date),
+      'sourceId': sourceId,
+      'description': description.trim(),
     });
   }
 
-  /// Adds a new income source to Firestore.
-  Future<String> addIncomeSource(IncomeSource source) async {
-    try {
-      final docRef = await _sourcesRef.add(source.toMap());
-      return docRef.id;
-    } on FirebaseException catch (e) {
-      throw Exception('Failed to add income source: ${e.message}');
-    }
+  Future<void> deleteIncome(String id) async {
+    await _collection.doc(id).delete();
   }
 
-  // ─── Private Helpers ───────────────────────────────────────────────────────
+  // ─── Fuentes de ingreso (usa source_incomes igual que SourceIncomeService) ─
 
-  /// Writes the "General" default source to Firestore if it doesn't exist.
-  Future<void> _ensureDefaultSourceExists() async {
-    final docRef = _sourcesRef.doc(IncomeSource.general.id);
-    final snapshot = await docRef.get();
-    if (!snapshot.exists) {
-      await docRef.set(IncomeSource.general.toMap());
-    }
+  Future<List<SourceIncome>> getSourceIncomesByUser() async {
+    final userId = await _getCurrentUserId();
+
+    final snapshot = await _db
+        .collection('source_incomes')
+        .where('userId', isEqualTo: userId)
+        .orderBy('name')
+        .get();
+
+    final sources = snapshot.docs
+        .map((doc) => SourceIncome.fromMap(doc.data()))
+        .toList();
+
+    if (sources.isEmpty) return [_genericSource(userId)];
+    return sources;
+  }
+
+  SourceIncome _genericSource(String userId) {
+    return SourceIncome(
+      id: 'generic',
+      userId: userId,
+      name: 'General',
+      description: 'Fuente de ingreso por defecto',
+      personalized: false,
+    );
   }
 }

@@ -3,10 +3,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
-
-import '../models/income_model.dart';
+import '../models/sourceIncome.dart';
 import '../services/income_service.dart';
-import '../utils/app_theme.dart'; // Contains AppColors
+import '../utils/app_theme.dart';
 
 class AddIncomeScreen extends StatefulWidget {
   const AddIncomeScreen({super.key});
@@ -17,183 +16,143 @@ class AddIncomeScreen extends StatefulWidget {
 
 class _AddIncomeScreenState extends State<AddIncomeScreen>
     with SingleTickerProviderStateMixin {
-  // ─── State ──────────────────────────────────────────────────────────────
-  final _formKey = GlobalKey<FormState>();
+  // ─── Form ──────────────────────────────────────────────────────────────────
+  final _formKey          = GlobalKey<FormState>();
   final _amountController = TextEditingController();
-  final _descriptionController = TextEditingController();
+  final _descController   = TextEditingController();
 
-  DateTime _selectedDate = DateTime.now();
-  IncomeSource? _selectedSource;
+  DateTime _selectedDate   = DateTime.now();
+  SourceIncome? _selectedSource;
+  List<SourceIncome> _sources = [];
 
-  List<IncomeSource> _sources = [];
   bool _isLoadingSources = true;
-  bool _isSaving = false;
+  bool _isSaving         = false;
 
-  final IncomeService _incomeService = IncomeService();
+  final _service = IncomeService();
 
-  late final AnimationController _animationController;
-  late final Animation<double> _fadeAnimation;
-  late final Animation<Offset> _slideAnimation;
+  // ─── Animación de entrada ──────────────────────────────────────────────────
+  late final AnimationController _animCtrl;
+  late final Animation<double>   _fadeAnim;
+  late final Animation<Offset>   _slideAnim;
 
-  // ─── Lifecycle ────────────────────────────────────────────────────────────
   @override
   void initState() {
     super.initState();
-
-    _animationController = AnimationController(
+    _animCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 480),
+      duration: const Duration(milliseconds: 420),
     );
-    _fadeAnimation = CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.easeOut,
-    );
-    _slideAnimation = Tween<Offset>(
+    _fadeAnim  = CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut);
+    _slideAnim = Tween<Offset>(
       begin: const Offset(0, 0.06),
       end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.easeOut,
-    ));
+    ).animate(CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut));
 
-    _animationController.forward();
+    _animCtrl.forward();
     _loadSources();
   }
 
   @override
   void dispose() {
     _amountController.dispose();
-    _descriptionController.dispose();
-    _animationController.dispose();
+    _descController.dispose();
+    _animCtrl.dispose();
     super.dispose();
   }
 
-  // ─── Data Loading ─────────────────────────────────────────────────────────
+  // ─── Carga de fuentes ──────────────────────────────────────────────────────
   Future<void> _loadSources() async {
     try {
-      final sources = await _incomeService.fetchIncomeSources();
+      final sources = await _service.getSourceIncomesByUser();
       if (mounted) {
         setState(() {
-          _sources = sources;
-          // CA3: Default to "General" if only one source (or none).
-          _selectedSource =
-              sources.length == 1 ? sources.first : null;
+          _sources        = sources;
+          _selectedSource = sources.length == 1 ? sources.first : null;
           _isLoadingSources = false;
         });
       }
     } catch (_) {
-      if (mounted) {
-        setState(() {
-          _sources = [IncomeSource.general];
-          _selectedSource = IncomeSource.general;
-          _isLoadingSources = false;
-        });
-      }
+      if (mounted) setState(() => _isLoadingSources = false);
     }
   }
 
-  // ─── Interactions ─────────────────────────────────────────────────────────
+  // ─── DatePicker ────────────────────────────────────────────────────────────
   Future<void> _pickDate() async {
-    final now = DateTime.now();
+    final now    = DateTime.now();
     final picked = await showDatePicker(
       context: context,
       initialDate: _selectedDate,
       firstDate: DateTime(now.year - 5),
       lastDate: now,
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: ColorScheme.dark(
-              primary: AppColors.accent,
-              onPrimary: AppColors.background,
-              surface: AppColors.surface,
-              onSurface: AppColors.primary,
-            ),
-            dialogBackgroundColor: AppColors.background,
-            textButtonTheme: TextButtonThemeData(
-              style: TextButton.styleFrom(
-                foregroundColor: AppColors.accent,
-              ),
-            ),
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: const ColorScheme.dark(
+            primary:   AppColors.primary,
+            onPrimary: AppColors.accent,
+            surface:   AppColors.surface2,
+            onSurface: AppColors.accent,
           ),
-          child: child!,
-        );
-      },
+          textButtonTheme: TextButtonThemeData(
+            style: TextButton.styleFrom(foregroundColor: AppColors.tealAccent),
+          ),
+          dialogBackgroundColor: AppColors.surface2,
+        ),
+        child: child!,
+      ),
     );
-    if (picked != null) {
-      setState(() => _selectedDate = picked);
-    }
+    if (picked != null) setState(() => _selectedDate = picked);
   }
 
-  Future<void> _saveIncome() async {
+  // ─── Guardar ───────────────────────────────────────────────────────────────
+  Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     if (_selectedSource == null) {
-      _showSnackbar('Por favor selecciona una fuente de ingreso.');
+      _snack('Selecciona una fuente de ingreso.');
       return;
     }
 
     setState(() => _isSaving = true);
-
     try {
-      final income = Income(
-        amount: double.parse(_amountController.text.replaceAll(',', '.')),
-        date: _selectedDate,
-        sourceId: _selectedSource!.id,
-        description: _descriptionController.text.trim().isEmpty
-            ? null
-            : _descriptionController.text.trim(),
+      await _service.addIncome(
+        amount:      double.parse(_amountController.text.replaceAll(',', '.')),
+        date:        _selectedDate,
+        sourceId:    _selectedSource!.id,
+        description: _descController.text.trim(),
       );
-
-      await _incomeService.addIncome(income);
-
       if (mounted) {
-        _showSnackbar('¡Ingreso registrado exitosamente!', isSuccess: true);
-        await Future.delayed(const Duration(milliseconds: 600));
+        _snack('¡Ingreso registrado!', success: true);
+        await Future.delayed(const Duration(milliseconds: 500));
         if (mounted) Navigator.of(context).pop(true);
       }
     } catch (e) {
-      if (mounted) {
-        _showSnackbar('Error al guardar: ${e.toString()}');
-      }
+      if (mounted) _snack('Error: ${e.toString()}');
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
   }
 
-  void _showSnackbar(String message, {bool isSuccess = false}) {
+  void _snack(String msg, {bool success = false}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(
-          message,
-          style: const TextStyle(
-            fontFamily: 'SF Pro Display',
-            fontSize: 13,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        backgroundColor:
-            isSuccess ? AppColors.accent : Colors.redAccent.shade200,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-        duration: const Duration(seconds: 2),
+        content: Text(msg),
+        backgroundColor: success ? AppColors.primary : AppColors.error,
       ),
     );
   }
 
-  // ─── Build ────────────────────────────────────────────────────────────────
+  // ─── UI ────────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
         child: FadeTransition(
-          opacity: _fadeAnimation,
+          opacity: _fadeAnim,
           child: SlideTransition(
-            position: _slideAnimation,
+            position: _slideAnim,
             child: Column(
               children: [
-                _buildAppBar(),
+                _buildHeader(),
                 Expanded(
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
@@ -203,13 +162,13 @@ class _AddIncomeScreenState extends State<AddIncomeScreen>
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           _buildAmountField(),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 12),
                           _buildDateField(),
-                          const SizedBox(height: 16),
-                          _buildSourceDropdown(),
-                          const SizedBox(height: 16),
-                          _buildDescriptionField(),
-                          const SizedBox(height: 36),
+                          const SizedBox(height: 12),
+                          _buildSourceField(),
+                          const SizedBox(height: 12),
+                          _buildDescField(),
+                          const SizedBox(height: 32),
                           _buildSaveButton(),
                         ],
                       ),
@@ -224,59 +183,76 @@ class _AddIncomeScreenState extends State<AddIncomeScreen>
     );
   }
 
-  // ─── AppBar ───────────────────────────────────────────────────────────────
-  Widget _buildAppBar() {
+  // ── Header ────────────────────────────────────────────────────
+  Widget _buildHeader() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 12, 20, 12),
       child: Row(
         children: [
-          _MinimalBackButton(onPressed: () => Navigator.of(context).pop()),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Nuevo Ingreso',
-                  style: TextStyle(
-                    color: AppColors.primary,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: -0.5,
-                  ),
-                ),
-                Text(
-                  DateFormat("EEEE, d 'de' MMMM", 'es').format(DateTime.now()),
-                  style: TextStyle(
-                    color: AppColors.primary.withOpacity(0.4),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w400,
-                  ),
-                ),
-              ],
+          // Botón volver — estilo idéntico al home
+          GestureDetector(
+            onTap: () => Navigator.of(context).pop(),
+            child: Container(
+              width: 38,
+              height: 38,
+              margin: const EdgeInsets.only(left: 8),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(11),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: const Icon(
+                Icons.arrow_back_ios_new_rounded,
+                color: AppColors.accentDim,
+                size: 16,
+              ),
             ),
+          ),
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'NUEVO INGRESO',
+                style: TextStyle(
+                  fontSize: 10,
+                  letterSpacing: 1.5,
+                  color: AppColors.accentMuted,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                DateFormat("d 'de' MMMM, yyyy", 'es').format(DateTime.now()),
+                style: const TextStyle(
+                  fontSize: 16,
+                  color: AppColors.accent,
+                  fontWeight: FontWeight.w400,
+                ),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
 
-  // ─── Amount Field ──────────────────────────────────────────────────────────
+  // ── Monto ─────────────────────────────────────────────────────
   Widget _buildAmountField() {
-    return _FieldContainer(
+    return _Card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _FieldLabel(label: 'Monto', isRequired: true),
+          _Label('MONTO', required: true),
           const SizedBox(height: 10),
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Text(
+              const Text(
                 '\$',
                 style: TextStyle(
-                  color: AppColors.accent,
                   fontSize: 28,
+                  color: AppColors.tealAccent,
                   fontWeight: FontWeight.w300,
                 ),
               ),
@@ -284,45 +260,36 @@ class _AddIncomeScreenState extends State<AddIncomeScreen>
               Expanded(
                 child: TextFormField(
                   controller: _amountController,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   inputFormatters: [
-                    FilteringTextInputFormatter.allow(
-                        RegExp(r'^\d+[,.]?\d{0,2}')),
+                    FilteringTextInputFormatter.allow(RegExp(r'^\d+[,.]?\d{0,2}')),
                   ],
-                  style: TextStyle(
-                    color: AppColors.primary,
+                  style: const TextStyle(
                     fontSize: 32,
-                    fontWeight: FontWeight.w600,
+                    color: AppColors.accent,
+                    fontWeight: FontWeight.w300,
                     letterSpacing: -1,
                   ),
-                  decoration: InputDecoration(
+                  decoration: const InputDecoration(
                     hintText: '0.00',
-                    hintStyle: TextStyle(
-                      color: AppColors.primary.withOpacity(0.2),
-                      fontSize: 32,
-                      fontWeight: FontWeight.w300,
-                    ),
+                    // Sobreescribe el tema global para que no haya borde en este campo
                     border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    errorBorder: InputBorder.none,
+                    focusedErrorBorder: InputBorder.none,
+                    filled: false,
                     contentPadding: EdgeInsets.zero,
                     errorStyle: TextStyle(
-                      color: Colors.redAccent.shade200,
+                      color: AppColors.error,
                       fontSize: 11,
-                      fontWeight: FontWeight.w500,
                     ),
                   ),
-                  // CA1: Required, numeric, positive, > 0
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'El monto es obligatorio.';
-                    }
-                    final parsed =
-                        double.tryParse(value.replaceAll(',', '.'));
-                    if (parsed == null) return 'Ingresa un número válido.';
-                    if (parsed <= 0) {
-                      return 'El monto debe ser mayor a cero.';
-                    }
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty) return 'El monto es obligatorio.';
+                    final n = double.tryParse(v.replaceAll(',', '.'));
+                    if (n == null) return 'Ingresa un número válido.';
+                    if (n <= 0)   return 'Debe ser mayor a cero.';
                     return null;
                   },
                 ),
@@ -334,284 +301,222 @@ class _AddIncomeScreenState extends State<AddIncomeScreen>
     );
   }
 
-  // ─── Date Field ────────────────────────────────────────────────────────────
+  // ── Fecha ─────────────────────────────────────────────────────
   Widget _buildDateField() {
-    return _FieldContainer(
+    return GestureDetector(
       onTap: _pickDate,
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: AppColors.accent.withOpacity(0.12),
-              borderRadius: BorderRadius.circular(10),
+      child: _Card(
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: AppColors.primary.withOpacity(0.3),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.primary.withOpacity(0.5)),
+              ),
+              child: const Icon(
+                Icons.calendar_today_rounded,
+                size: 17,
+                color: AppColors.tealAccent,
+              ),
             ),
-            child: Icon(
-              Icons.calendar_today_rounded,
-              color: AppColors.accent,
-              size: 18,
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _FieldLabel(label: 'Fecha', isRequired: true),
-                const SizedBox(height: 2),
-                Text(
-                  DateFormat("d 'de' MMMM, yyyy", 'es').format(_selectedDate),
-                  style: TextStyle(
-                    color: AppColors.primary,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w500,
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _Label('FECHA', required: true),
+                  const SizedBox(height: 3),
+                  Text(
+                    DateFormat("d 'de' MMMM, yyyy", 'es').format(_selectedDate),
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: AppColors.accent,
+                      fontWeight: FontWeight.w400,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          Icon(
-            Icons.chevron_right_rounded,
-            color: AppColors.primary.withOpacity(0.3),
-            size: 20,
-          ),
-        ],
+            const Icon(
+              Icons.chevron_right_rounded,
+              color: AppColors.accentMuted,
+              size: 20,
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  // ─── Source Dropdown ───────────────────────────────────────────────────────
-  Widget _buildSourceDropdown() {
-    return _FieldContainer(
+  // ── Fuente de ingreso ─────────────────────────────────────────
+  Widget _buildSourceField() {
+    return _Card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _FieldLabel(label: 'Fuente de Ingreso', isRequired: true),
+          _Label('FUENTE DE INGRESO', required: true),
           const SizedBox(height: 10),
           if (_isLoadingSources)
             Center(
               child: SizedBox(
-                height: 20,
-                width: 20,
+                height: 18,
+                width: 18,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  color: AppColors.accent,
+                  color: AppColors.tealAccent,
                 ),
               ),
             )
           else
-            DropdownButtonFormField<IncomeSource>(
+            DropdownButtonFormField<SourceIncome>(
               value: _selectedSource,
-              dropdownColor: AppColors.surface,
-              style: TextStyle(
-                color: AppColors.primary,
-                fontSize: 15,
-                fontWeight: FontWeight.w500,
+              dropdownColor: AppColors.surface2,
+              iconEnabledColor: AppColors.tealAccent,
+              style: const TextStyle(
+                color: AppColors.accent,
+                fontSize: 14,
+                fontWeight: FontWeight.w400,
               ),
-              iconEnabledColor: AppColors.accent,
               decoration: const InputDecoration(
                 border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                errorBorder: InputBorder.none,
+                focusedErrorBorder: InputBorder.none,
+                filled: false,
                 contentPadding: EdgeInsets.zero,
                 isDense: true,
+                errorStyle: TextStyle(color: AppColors.error, fontSize: 11),
               ),
-              hint: Text(
+              hint: const Text(
                 'Selecciona una fuente',
-                style: TextStyle(
-                  color: AppColors.primary.withOpacity(0.35),
-                  fontSize: 15,
-                  fontWeight: FontWeight.w400,
-                ),
+                style: TextStyle(color: AppColors.accentMuted, fontSize: 14),
               ),
-              items: _sources
-                  .map((source) => DropdownMenuItem<IncomeSource>(
-                        value: source,
-                        child: Text(source.name),
-                      ))
-                  .toList(),
-              onChanged: (value) => setState(() => _selectedSource = value),
-              validator: (value) {
-                if (value == null) {
-                  return 'Selecciona una fuente de ingreso.';
-                }
-                return null;
-              },
+              items: _sources.map((s) => DropdownMenuItem(
+                value: s,
+                child: Text(s.name),
+              )).toList(),
+              onChanged: (v) => setState(() => _selectedSource = v),
+              validator: (v) =>
+                  v == null ? 'Selecciona una fuente.' : null,
             ),
         ],
       ),
     );
   }
 
-  // ─── Description Field ─────────────────────────────────────────────────────
-  Widget _buildDescriptionField() {
-    return _FieldContainer(
+  // ── Descripción ───────────────────────────────────────────────
+  Widget _buildDescField() {
+    return _Card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _FieldLabel(label: 'Descripción', isRequired: false),
+          _Label('DESCRIPCIÓN', required: false),
           const SizedBox(height: 10),
           TextFormField(
-            controller: _descriptionController,
+            controller: _descController,
             maxLines: 3,
             minLines: 1,
-            style: TextStyle(
-              color: AppColors.primary,
+            style: const TextStyle(
+              color: AppColors.accent,
               fontSize: 14,
-              fontWeight: FontWeight.w400,
+              fontWeight: FontWeight.w300,
               height: 1.5,
             ),
-            decoration: InputDecoration(
+            decoration: const InputDecoration(
               hintText: 'Ej: Pago de nómina, proyecto freelance...',
-              hintStyle: TextStyle(
-                color: AppColors.primary.withOpacity(0.3),
-                fontSize: 14,
-                fontWeight: FontWeight.w300,
-              ),
               border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+              filled: false,
               contentPadding: EdgeInsets.zero,
             ),
-            // CA4: Optional — no validator needed.
           ),
         ],
       ),
     );
   }
 
-  // ─── Save Button ───────────────────────────────────────────────────────────
+  // ── Botón guardar ─────────────────────────────────────────────
   Widget _buildSaveButton() {
     return SizedBox(
       width: double.infinity,
-      height: 54,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        child: ElevatedButton(
-          onPressed: _isSaving ? null : _saveIncome,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.accent,
-            disabledBackgroundColor: AppColors.accent.withOpacity(0.5),
-            foregroundColor: AppColors.background,
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
-            ),
-          ),
-          child: _isSaving
-              ? SizedBox(
-                  height: 20,
-                  width: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.5,
-                    color: AppColors.background,
-                  ),
-                )
-              : const Text(
-                  'Registrar Ingreso',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.1,
-                  ),
+      height: 50,
+      child: ElevatedButton(
+        // ElevatedButtonTheme ya está configurado en AppTheme.dark()
+        // — color primary, texto accent, radius 12, sin elevación
+        onPressed: _isSaving ? null : _save,
+        child: _isSaving
+            ? const SizedBox(
+                height: 18,
+                width: 18,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  color: AppColors.accent,
                 ),
-        ),
+              )
+            : const Text('Registrar ingreso'),
       ),
     );
   }
 }
 
-// ─── Shared Sub-Widgets ──────────────────────────────────────────────────────
+// ─── Widgets de apoyo ─────────────────────────────────────────────────────────
 
-/// A reusable container that wraps form fields with a consistent card style.
-class _FieldContainer extends StatelessWidget {
+/// Card contenedor — mismo color/borde que los cards del HomeScreen
+class _Card extends StatelessWidget {
   final Widget child;
-  final VoidCallback? onTap;
-
-  const _FieldContainer({required this.child, this.onTap});
+  const _Card({required this.child});
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: AppColors.border,
-            width: 1,
-          ),
-        ),
-        child: child,
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border),
       ),
+      child: child,
     );
   }
 }
 
-/// A small label shown above each field.
-class _FieldLabel extends StatelessWidget {
-  final String label;
-  final bool isRequired;
-
-  const _FieldLabel({required this.label, required this.isRequired});
+/// Etiqueta de campo — estilo idéntico a _buildSectionLabel() del HomeScreen
+class _Label extends StatelessWidget {
+  final String text;
+  final bool required;
+  const _Label(this.text, {required this.required});
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
         Text(
-          label,
-          style: TextStyle(
-            color: AppColors.primary.withOpacity(0.45),
-            fontSize: 11,
+          text,
+          style: const TextStyle(
+            fontSize: 10,
+            letterSpacing: 1.2,
+            color: AppColors.accentMuted,
             fontWeight: FontWeight.w600,
-            letterSpacing: 0.8,
           ),
         ),
-        if (isRequired) ...[
+        if (required) ...[
           const SizedBox(width: 3),
-          Text(
+          const Text(
             '•',
             style: TextStyle(
-              color: AppColors.accent,
+              color: AppColors.tealAccent,
               fontSize: 14,
               height: 1,
             ),
           ),
         ],
       ],
-    );
-  }
-}
-
-/// A minimal circular back button matching KAIRO's aesthetic.
-class _MinimalBackButton extends StatelessWidget {
-  final VoidCallback onPressed;
-
-  const _MinimalBackButton({required this.onPressed});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(left: 8),
-      child: SizedBox(
-        width: 40,
-        height: 40,
-        child: TextButton(
-          onPressed: onPressed,
-          style: TextButton.styleFrom(
-            padding: EdgeInsets.zero,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            backgroundColor: AppColors.surface,
-          ),
-          child: Icon(
-            Icons.arrow_back_ios_new_rounded,
-            color: AppColors.primary,
-            size: 16,
-          ),
-        ),
-      ),
     );
   }
 }

@@ -3,44 +3,49 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class Income {
-  final String? id;
+  final String id;
+  final String userId;
   final double amount;
   final DateTime date;
   final String sourceId;
-  final String? description;
+  final String description;
 
   Income({
-    this.id,
+    required this.id,
+    required this.userId,
     required this.amount,
     required this.date,
     required this.sourceId,
-    this.description,
+    this.description = '',
   });
 
-  /// Converts the [Income] object to a Map for Firestore storage.
   Map<String, dynamic> toMap() {
     return {
+      'id': id,
+      'userId': userId,
       'amount': amount,
       'date': Timestamp.fromDate(date),
       'sourceId': sourceId,
-      'description': description ?? '',
+      'description': description,
     };
   }
 
-  /// Creates an [Income] object from a Firestore document snapshot.
-  factory Income.fromMap(Map<String, dynamic> map, String documentId) {
+  factory Income.fromMap(Map<String, dynamic> map) {
     return Income(
-      id: documentId,
-      amount: (map['amount'] as num).toDouble(),
-      date: (map['date'] as Timestamp).toDate(),
-      sourceId: map['sourceId'] as String? ?? 'general',
-      description: map['description'] as String?,
+      id: map['id'] as String? ?? '',
+      userId: map['userId'] as String? ?? '',
+      amount: (map['amount'] as num? ?? 0).toDouble(),
+      date: map['date'] is Timestamp
+          ? (map['date'] as Timestamp).toDate()
+          : DateTime.now(),
+      sourceId: map['sourceId'] as String? ?? 'generic',
+      description: map['description'] as String? ?? '',
     );
   }
 
-  /// Creates a copy of [Income] with updated fields.
   Income copyWith({
     String? id,
+    String? userId,
     double? amount,
     DateTime? date,
     String? sourceId,
@@ -48,50 +53,11 @@ class Income {
   }) {
     return Income(
       id: id ?? this.id,
+      userId: userId ?? this.userId,
       amount: amount ?? this.amount,
       date: date ?? this.date,
       sourceId: sourceId ?? this.sourceId,
       description: description ?? this.description,
     );
   }
-
-  @override
-  String toString() {
-    return 'Income(id: $id, amount: $amount, date: $date, sourceId: $sourceId, description: $description)';
-  }
-}
-
-/// Represents an income source (e.g., "Salary", "Freelance", "General").
-class IncomeSource {
-  final String id;
-  final String name;
-  final String? iconName;
-
-  const IncomeSource({
-    required this.id,
-    required this.name,
-    this.iconName,
-  });
-
-  Map<String, dynamic> toMap() {
-    return {
-      'name': name,
-      'iconName': iconName ?? '',
-    };
-  }
-
-  factory IncomeSource.fromMap(Map<String, dynamic> map, String documentId) {
-    return IncomeSource(
-      id: documentId,
-      name: map['name'] as String,
-      iconName: map['iconName'] as String?,
-    );
-  }
-
-  /// Default fallback source when the user has none configured.
-  static const IncomeSource general = IncomeSource(
-    id: 'general',
-    name: 'General',
-    iconName: 'wallet',
-  );
 }
