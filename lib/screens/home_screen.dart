@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:firebase_auth/firebase_auth.dart';       // ← nuevo
-import 'package:cloud_firestore/cloud_firestore.dart';   // ← nuevo
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../utils/app_theme.dart';
 import '../screens/sourceIncome_screen.dart';
 import '../screens/expenseCategories_screen.dart';
-import '../screens/add_income_screen.dart';               // ← nuevo
+import '../screens/add_income_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -19,9 +19,9 @@ class _HomeScreenState extends State<HomeScreen> {
   int _selectedPeriod = 0;
   final List<String> _periods = ['Este mes', 'Semana', 'Año'];
 
-  // ── CAMBIO 1: estado para nombre e ingresos ──────────────────
   String _firstName = '';
   double _totalIncome = 0;
+  double _totalExpenses = 0;
   bool _loadingUserData = true;
 
   @override
@@ -32,45 +32,60 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _loadUserData() async {
     try {
-      final uid = FirebaseAuth.instance.currentUser?.uid;
-      if (uid == null) return;
+      final prefs = await SharedPreferences.getInstance();
+      final uid = prefs.getString('userId'); // Recuperamos el ID manual guardado en AuthService
+      
+      if (uid == null) {
+        if (mounted) setState(() => _loadingUserData = false);
+        return;
+      }
 
+      // 1. Cargar nombre del usuario desde la colección 'users'
       final doc = await FirebaseFirestore.instance
           .collection('users')
           .doc(uid)
           .get();
 
-      // Extrae el primer nombre del campo 'name' o 'displayName'
-      final rawName = (doc.data()?['nameUser'] ??
-        FirebaseAuth.instance.currentUser?.displayName ??
-        '') as String;
-      final firstName = rawName.trim().split(' ').first;
+      if (doc.exists) {
+        final rawName = (doc.data()?['nameUser'] ?? '') as String;
+        _firstName = rawName.trim().split(' ').first;
+      }
 
-      // Suma todos los ingresos del usuario
+      // 2. Sumar ingresos desde la colección raíz 'incomes' filtrando por userId
       final incomesSnap = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(uid)
           .collection('incomes')
+          .where('userId', isEqualTo: uid)
           .get();
 
-      double total = 0;
-      for (final doc in incomesSnap.docs) {
-        total += (doc.data()['amount'] as num? ?? 0).toDouble();
+      double totalIn = 0;
+      for (final d in incomesSnap.docs) {
+        totalIn += (d.data()['amount'] as num? ?? 0).toDouble();
+      }
+
+      // 3. Sumar gastos desde la colección raíz 'expenses' (asumiendo misma estructura que incomes)
+      final expensesSnap = await FirebaseFirestore.instance
+          .collection('expenses')
+          .where('userId', isEqualTo: uid)
+          .get();
+
+      double totalOut = 0;
+      for (final d in expensesSnap.docs) {
+        totalOut += (d.data()['amount'] as num? ?? 0).toDouble();
       }
 
       if (mounted) {
         setState(() {
-          _firstName = firstName;
-          _totalIncome = total;
+          _totalIncome = totalIn;
+          _totalExpenses = totalOut;
           _loadingUserData = false;
         });
       }
-    } catch (_) {
+    } catch (e) {
+      debugPrint("Error al cargar datos: $e");
       if (mounted) setState(() => _loadingUserData = false);
     }
   }
 
-  /// Formatea un double como pesos colombianos: $3,200,000
   String _formatCurrency(double amount) {
     final parts = amount.toStringAsFixed(0).split('');
     final buffer = StringBuffer();
@@ -138,104 +153,69 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // ── TOP BAR ──────────────────────────────────────────────────
   Widget _buildTopBar() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 10, 20, 12),
       child: Row(
         children: [
           Container(
-            width: 36,
-            height: 36,
+            width: 36, height: 36,
             decoration: BoxDecoration(
               color: AppColors.primary,
               borderRadius: BorderRadius.circular(10),
               border: Border.all(color: AppColors.border),
             ),
-            child: const Icon(
-              Icons.bar_chart_rounded,
-              color: AppColors.accent,
-              size: 20,
-            ),
+            child: const Icon(Icons.bar_chart_rounded, color: AppColors.accent, size: 20),
           ),
           const SizedBox(width: 10),
-          const Text(
-            'KAIRO',
-            style: TextStyle(
-              fontSize: 20,
-              color: AppColors.accent,
-              letterSpacing: 2.5,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
+          const Text('KAIRO', style: TextStyle(fontSize: 20, color: AppColors.accent, letterSpacing: 2.5, fontWeight: FontWeight.w700)),
           const Spacer(),
-          Stack(
-            children: [
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(11),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: const Icon(
-                  Icons.notifications_none_rounded,
-                  color: AppColors.accentDim,
-                  size: 20,
-                ),
-              ),
-              Positioned(
-                top: 8,
-                right: 8,
-                child: Container(
-                  width: 7,
-                  height: 7,
-                  decoration: BoxDecoration(
-                    color: AppColors.accent,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: AppColors.background, width: 1.5),
-                  ),
-                ),
-              ),
-            ],
-          ),
+          _notificationIcon(),
         ],
       ),
     );
   }
 
-  // ── GREETING — CAMBIO 2: primer nombre dinámico ──────────────
-  Widget _buildGreeting() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _notificationIcon() {
+    return Stack(
       children: [
-        Text(
-          'DOMINGO, 10 DE MAYO',
-          style: TextStyle(
-            fontSize: 10,
-            letterSpacing: 1.2,
-            color: AppColors.accentMuted,
-            fontWeight: FontWeight.w600,
+        Container(
+          width: 38, height: 38,
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(11),
+            border: Border.all(color: AppColors.border),
           ),
+          child: const Icon(Icons.notifications_none_rounded, color: AppColors.accentDim, size: 20),
         ),
-        const SizedBox(height: 4),
-        Text(
-          _loadingUserData
-              ? 'Hola 👋'
-              : 'Hola, ${_firstName.isNotEmpty ? _firstName : 'tú'} 👋',
-          style: const TextStyle(
-            fontSize: 22,
-            color: AppColors.accent,
-            fontWeight: FontWeight.w400,
+        Positioned(
+          top: 8, right: 8,
+          child: Container(
+            width: 7, height: 7,
+            decoration: BoxDecoration(color: AppColors.accent, shape: BoxShape.circle, border: Border.all(color: AppColors.background, width: 1.5)),
           ),
         ),
       ],
     );
   }
 
-  // ── BALANCE CARD — CAMBIO 3: total ingresos dinámico ─────────
+  Widget _buildGreeting() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('HOY', style: TextStyle(fontSize: 10, letterSpacing: 1.2, color: AppColors.accentMuted, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 4),
+        Text(
+          _loadingUserData ? 'Cargando...' : 'Hola, ${_firstName.isNotEmpty ? _firstName : 'Usuario'} 👋',
+          style: const TextStyle(fontSize: 22, color: AppColors.accent, fontWeight: FontWeight.w400),
+        ),
+      ],
+    );
+  }
+
   Widget _buildBalanceCard() {
+    // Cálculo dinámico del balance real
+    final balance = _totalIncome - _totalExpenses;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
@@ -247,41 +227,18 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'BALANCE TOTAL',
-            style: TextStyle(
-              fontSize: 10,
-              letterSpacing: 1.5,
-              color: AppColors.accentDim,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
+          const Text('BALANCE TOTAL', style: TextStyle(fontSize: 10, letterSpacing: 1.5, color: AppColors.accentDim, fontWeight: FontWeight.w600)),
           const SizedBox(height: 6),
           Text(
-            '\$1,240,500', // balance neto: mantén tu lógica actual
-            style: const TextStyle(
-              fontSize: 36,
-              color: AppColors.accent,
-              fontWeight: FontWeight.w300,
-              letterSpacing: -1,
-            ),
+            _formatCurrency(balance),
+            style: const TextStyle(fontSize: 36, color: AppColors.accent, fontWeight: FontWeight.w300, letterSpacing: -1),
           ),
           const SizedBox(height: 14),
           Row(
             children: [
-              _statPill(
-                _loadingUserData
-                    ? '+\$—'
-                    : '+${_formatCurrency(_totalIncome)}',   // ← dinámico
-                Icons.arrow_upward_rounded,
-                isIncome: true,
-              ),
+              _statPill(_loadingUserData ? '+\$—' : '+${_formatCurrency(_totalIncome)}', Icons.arrow_upward_rounded, isIncome: true),
               const SizedBox(width: 8),
-              _statPill(
-                '−\$1,959,500',
-                Icons.arrow_downward_rounded,
-                isIncome: false,
-              ),
+              _statPill(_loadingUserData ? '-\$—' : '-${_formatCurrency(_totalExpenses)}', Icons.arrow_downward_rounded, isIncome: false),
             ],
           ),
         ],
@@ -293,46 +250,31 @@ class _HomeScreenState extends State<HomeScreen> {
     final color = isIncome ? AppColors.tealAccent : AppColors.redAccent;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(20),
-      ),
+      decoration: BoxDecoration(color: Colors.white.withOpacity(0.08), borderRadius: BorderRadius.circular(20)),
       child: Row(
         children: [
           Icon(icon, size: 13, color: color),
           const SizedBox(width: 4),
-          Text(
-            amount,
-            style: TextStyle(
-              fontSize: 12,
-              color: color,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
+          Text(amount, style: TextStyle(fontSize: 12, color: color, fontWeight: FontWeight.w600)),
         ],
       ),
     );
   }
 
-  // ── QUICK ACTIONS — CAMBIO 4: botón Ingreso abre la pantalla ─
   Widget _buildQuickActions() {
     final actions = [
-      {'icon': Icons.add_rounded,            'label': 'Ingreso'},
-      {'icon': Icons.remove_rounded,         'label': 'Gasto'},
-      {'icon': Icons.track_changes_rounded,  'label': 'Meta'},
+      {'icon': Icons.add_rounded, 'label': 'Ingreso'},
+      {'icon': Icons.remove_rounded, 'label': 'Gasto'},
+      {'icon': Icons.track_changes_rounded, 'label': 'Meta'},
       {'icon': Icons.pie_chart_outline_rounded, 'label': 'Reportes'},
     ];
     return Row(
-      children: actions
-          .map(
-            (a) => Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 3),
-                child: _actionBtn(a['icon'] as IconData, a['label'] as String),
-              ),
-            ),
-          )
-          .toList(),
+      children: actions.map((a) => Expanded(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 3),
+          child: _actionBtn(a['icon'] as IconData, a['label'] as String),
+        ),
+      )).toList(),
     );
   }
 
@@ -340,27 +282,17 @@ class _HomeScreenState extends State<HomeScreen> {
     return GestureDetector(
       onTap: () async {
         if (label == 'Ingreso') {
-          // Abre AddIncomeScreen y recarga datos si se guardó algo
-          final saved = await Navigator.push<bool>(
-            context,
-            MaterialPageRoute(builder: (_) => const AddIncomeScreen()),
-          );
+          final saved = await Navigator.push<bool>(context, MaterialPageRoute(builder: (_) => const AddIncomeScreen()));
           if (saved == true) _loadUserData();
         }
-        // Los demás botones mantienen su onTap vacío por ahora
       },
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.border),
-        ),
+        decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.border)),
         child: Column(
           children: [
             Container(
-              width: 36,
-              height: 36,
+              width: 36, height: 36,
               decoration: BoxDecoration(
                 color: AppColors.primary.withOpacity(0.4),
                 borderRadius: BorderRadius.circular(10),
@@ -369,21 +301,13 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Icon(icon, size: 18, color: AppColors.tealAccent),
             ),
             const SizedBox(height: 6),
-            Text(
-              label,
-              style: const TextStyle(
-                fontSize: 10,
-                color: AppColors.accentDim,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
+            Text(label, style: const TextStyle(fontSize: 10, color: AppColors.accentDim, fontWeight: FontWeight.w500)),
           ],
         ),
       ),
     );
   }
 
-  // ── PERIOD SELECTOR ──────────────────────────────────────────
   Widget _buildPeriodSelector() {
     return Row(
       children: _periods.asMap().entries.map((e) {
@@ -398,18 +322,9 @@ class _HomeScreenState extends State<HomeScreen> {
               decoration: BoxDecoration(
                 color: active ? AppColors.primary : Colors.transparent,
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: active ? AppColors.primary : AppColors.border,
-                ),
+                border: Border.all(color: active ? AppColors.primary : AppColors.border),
               ),
-              child: Text(
-                e.value,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500,
-                  color: active ? AppColors.accent : AppColors.accentMuted,
-                ),
-              ),
+              child: Text(e.value, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: active ? AppColors.accent : AppColors.accentMuted)),
             ),
           ),
         );
@@ -417,261 +332,66 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // ── SOURCES LIST ─────────────────────────────────────────────
   Widget _buildSourcesList() {
-    final sources = [
-      {
-        'icon': Icons.work_outline_rounded,
-        'name': 'Salario',
-        'sub': 'Ingreso fijo',
-        'amount': '+\$2,800,000',
-      },
-      {
-        'icon': Icons.laptop_rounded,
-        'name': 'Freelance',
-        'sub': 'Proyectos',
-        'amount': '+\$400,000',
-      },
-      {
-        'icon': Icons.account_balance_outlined,
-        'name': 'Inversiones',
-        'sub': 'Rendimientos',
-        'amount': '+\$0',
-      },
-    ];
-
     return Column(
       children: [
-        ...sources.map(
-          (s) => Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: _sourceItem(s),
-          ),
-        ),
+        _sourceItem({'icon': Icons.work_outline_rounded, 'name': 'Salario', 'amount': 'Actualizado'}),
+        const SizedBox(height: 8),
         GestureDetector(
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const IncomeSourcesScreen()),
-          ),
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const IncomeSourcesScreen())),
           child: Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 14),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppColors.border2),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.add_circle_outline_rounded,
-                  size: 16,
-                  color: AppColors.accentMuted,
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  'Agregar fuente',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AppColors.accentMuted,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 10),
-      ],
-    );
-  }
-
-  Widget _buildCategoriesWidget() {
-    final categories = [
-      {'emoji': '🏠', 'name': 'Vivienda'},
-      {'emoji': '🍔', 'name': 'Alimentación'},
-      {'emoji': '💊', 'name': 'Salud'},
-      {'emoji': '🚗', 'name': 'Transporte'},
-      {'emoji': '🎬', 'name': 'Entret.'},
-      {'emoji': '📱', 'name': 'Suscripc.'},
-    ];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          height: 86,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
-            itemCount: categories.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 8),
-            itemBuilder: (_, i) {
-              final cat = categories[i];
-              return _categoryCard(emoji: cat['emoji']!, name: cat['name']!);
-            },
-          ),
-        ),
-        const SizedBox(height: 10),
-        GestureDetector(
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const ExpenseCategoriesScreen()),
-          ),
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.border2),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(
-                  Icons.tune_rounded,
-                  size: 15,
-                  color: AppColors.accentMuted,
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  'Gestionar categorías',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AppColors.accentMuted,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
+            decoration: BoxDecoration(borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.border2)),
+            child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              Icon(Icons.add_circle_outline_rounded, size: 16, color: AppColors.accentMuted),
+              SizedBox(width: 6),
+              Text('Agregar fuente', style: TextStyle(fontSize: 12, color: AppColors.accentMuted, fontWeight: FontWeight.w500)),
+            ]),
           ),
         ),
       ],
-    );
-  }
-
-  Widget _categoryCard({required String emoji, required String name}) {
-    return Container(
-      width: 68,
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border2),
-      ),
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(emoji, style: const TextStyle(fontSize: 22)),
-          const SizedBox(height: 5),
-          Text(
-            name,
-            style: const TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w500,
-              color: AppColors.accent,
-            ),
-            textAlign: TextAlign.center,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
-      ),
     );
   }
 
   Widget _sourceItem(Map<String, dynamic> source) {
     return Container(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.3),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppColors.primary.withOpacity(0.5)),
-            ),
-            child: Icon(
-              source['icon'] as IconData,
-              size: 20,
-              color: AppColors.tealAccent,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  source['name']!,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                    color: AppColors.accent,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  source['sub']!,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: AppColors.accentMuted,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Text(
-            source['amount']!,
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: AppColors.tealAccent,
-            ),
-          ),
-        ],
+      decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.border)),
+      child: Row(children: [
+        Icon(source['icon'] as IconData, color: AppColors.tealAccent),
+        const SizedBox(width: 12),
+        Expanded(child: Text(source['name']!, style: const TextStyle(color: AppColors.accent, fontWeight: FontWeight.w500))),
+        Text(source['amount']!, style: const TextStyle(color: AppColors.tealAccent, fontWeight: FontWeight.w600)),
+      ]),
+    );
+  }
+
+  Widget _buildCategoriesWidget() {
+    return GestureDetector(
+      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ExpenseCategoriesScreen())),
+      child: Container(
+        width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.border2)),
+        child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Icon(Icons.tune_rounded, size: 15, color: AppColors.accentMuted),
+          SizedBox(width: 6),
+          Text('Gestionar categorías', style: TextStyle(fontSize: 12, color: AppColors.accentMuted, fontWeight: FontWeight.w500)),
+        ]),
       ),
     );
   }
 
-  // ── BOTTOM NAV ───────────────────────────────────────────────
   Widget _buildBottomNav() {
     return Container(
       padding: const EdgeInsets.only(top: 10, bottom: 24, left: 10, right: 10),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        border: Border(top: BorderSide(color: AppColors.border)),
-      ),
+      decoration: const BoxDecoration(color: AppColors.surface, border: Border(top: BorderSide(color: AppColors.border))),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
-        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           _navItem(Icons.home_rounded, 'Inicio', 0),
           _navItem(Icons.swap_horiz_rounded, 'Movimientos', 1),
-          GestureDetector(
-            onTap: () {},
-            child: Container(
-              width: 52,
-              height: 52,
-              margin: const EdgeInsets.only(bottom: 4),
-              decoration: BoxDecoration(
-                color: AppColors.accent,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: const Icon(
-                Icons.add_rounded,
-                color: AppColors.background,
-                size: 26,
-              ),
-            ),
-          ),
+          const Icon(Icons.add_box_rounded, size: 45, color: AppColors.accent),
           _navItem(Icons.bar_chart_rounded, 'Análisis', 3),
           _navItem(Icons.person_outline_rounded, 'Perfil', 4),
         ],
@@ -683,47 +403,14 @@ class _HomeScreenState extends State<HomeScreen> {
     final active = _selectedNav == index;
     return GestureDetector(
       onTap: () => setState(() => _selectedNav = index),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: active
-              ? AppColors.primary.withOpacity(0.35)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              size: 22,
-              color: active ? AppColors.tealAccent : AppColors.accentDim,
-            ),
-            const SizedBox(height: 3),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 9,
-                fontWeight: FontWeight.w500,
-                color: active ? AppColors.tealAccent : AppColors.accentMuted,
-              ),
-            ),
-          ],
-        ),
-      ),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Icon(icon, color: active ? AppColors.tealAccent : AppColors.accentDim),
+        Text(label, style: TextStyle(fontSize: 9, color: active ? AppColors.tealAccent : AppColors.accentMuted)),
+      ]),
     );
   }
 
   Widget _buildSectionLabel(String label) {
-    return Text(
-      label.toUpperCase(),
-      style: const TextStyle(
-        fontSize: 10,
-        letterSpacing: 1.2,
-        color: AppColors.accentMuted,
-        fontWeight: FontWeight.w600,
-      ),
-    );
+    return Text(label.toUpperCase(), style: const TextStyle(fontSize: 10, letterSpacing: 1.2, color: AppColors.accentMuted, fontWeight: FontWeight.w600));
   }
 }
