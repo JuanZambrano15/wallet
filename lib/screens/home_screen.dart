@@ -21,7 +21,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   String _firstName = '';
   double _totalIncome = 0;
-  double _totalExpenses = 0;
   bool _loadingUserData = true;
 
   @override
@@ -33,14 +32,14 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _loadUserData() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final uid = prefs.getString('userId'); // Recuperamos el ID manual guardado en AuthService
-      
+      final uid = prefs.getString('userId');
+
       if (uid == null) {
         if (mounted) setState(() => _loadingUserData = false);
         return;
       }
 
-      // 1. Cargar nombre del usuario desde la colección 'users'
+      // 1. Cargar nombre del usuario
       final doc = await FirebaseFirestore.instance
           .collection('users')
           .doc(uid)
@@ -51,7 +50,7 @@ class _HomeScreenState extends State<HomeScreen> {
         _firstName = rawName.trim().split(' ').first;
       }
 
-      // 2. Sumar ingresos desde la colección raíz 'incomes' filtrando por userId
+      // 2. Sumar ingresos
       final incomesSnap = await FirebaseFirestore.instance
           .collection('incomes')
           .where('userId', isEqualTo: uid)
@@ -62,21 +61,12 @@ class _HomeScreenState extends State<HomeScreen> {
         totalIn += (d.data()['amount'] as num? ?? 0).toDouble();
       }
 
-      // 3. Sumar gastos desde la colección raíz 'expenses' (asumiendo misma estructura que incomes)
-      final expensesSnap = await FirebaseFirestore.instance
-          .collection('expenses')
-          .where('userId', isEqualTo: uid)
-          .get();
-
-      double totalOut = 0;
-      for (final d in expensesSnap.docs) {
-        totalOut += (d.data()['amount'] as num? ?? 0).toDouble();
-      }
+      // NOTA: Los gastos se muestran en su propia pantalla,
+      // no se descuentan del balance de ingresos.
 
       if (mounted) {
         setState(() {
           _totalIncome = totalIn;
-          _totalExpenses = totalOut;
           _loadingUserData = false;
         });
       }
@@ -192,7 +182,11 @@ class _HomeScreenState extends State<HomeScreen> {
           top: 8, right: 8,
           child: Container(
             width: 7, height: 7,
-            decoration: BoxDecoration(color: AppColors.accent, shape: BoxShape.circle, border: Border.all(color: AppColors.background, width: 1.5)),
+            decoration: BoxDecoration(
+              color: AppColors.accent,
+              shape: BoxShape.circle,
+              border: Border.all(color: AppColors.background, width: 1.5),
+            ),
           ),
         ),
       ],
@@ -214,8 +208,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildBalanceCard() {
-    // Cálculo dinámico del balance real
-    final balance = _totalIncome - _totalExpenses;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
@@ -227,18 +219,23 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('BALANCE TOTAL', style: TextStyle(fontSize: 10, letterSpacing: 1.5, color: AppColors.accentDim, fontWeight: FontWeight.w600)),
+          const Text(
+            'TOTAL INGRESOS',
+            style: TextStyle(fontSize: 10, letterSpacing: 1.5, color: AppColors.accentDim, fontWeight: FontWeight.w600),
+          ),
           const SizedBox(height: 6),
           Text(
-            _formatCurrency(balance),
+            _loadingUserData ? '—' : _formatCurrency(_totalIncome),
             style: const TextStyle(fontSize: 36, color: AppColors.accent, fontWeight: FontWeight.w300, letterSpacing: -1),
           ),
           const SizedBox(height: 14),
           Row(
             children: [
-              _statPill(_loadingUserData ? '+\$—' : '+${_formatCurrency(_totalIncome)}', Icons.arrow_upward_rounded, isIncome: true),
-              const SizedBox(width: 8),
-              _statPill(_loadingUserData ? '-\$—' : '-${_formatCurrency(_totalExpenses)}', Icons.arrow_downward_rounded, isIncome: false),
+              _statPill(
+                _loadingUserData ? '+\$—' : '+${_formatCurrency(_totalIncome)}',
+                Icons.arrow_upward_rounded,
+                isIncome: true,
+              ),
             ],
           ),
         ],
@@ -282,13 +279,22 @@ class _HomeScreenState extends State<HomeScreen> {
     return GestureDetector(
       onTap: () async {
         if (label == 'Ingreso') {
-          final saved = await Navigator.push<bool>(context, MaterialPageRoute(builder: (_) => const AddIncomeScreen()));
+          final saved = await Navigator.push<bool>(
+            context,
+            MaterialPageRoute(builder: (_) => const AddIncomeScreen()),
+          );
           if (saved == true) _loadUserData();
+        } else if (label == 'Gasto') {
+          await Navigator.pushNamed(context, '/add-expense');
         }
       },
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.border)),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.border),
+        ),
         child: Column(
           children: [
             Container(
@@ -324,7 +330,14 @@ class _HomeScreenState extends State<HomeScreen> {
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(color: active ? AppColors.primary : AppColors.border),
               ),
-              child: Text(e.value, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: active ? AppColors.accent : AppColors.accentMuted)),
+              child: Text(
+                e.value,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                  color: active ? AppColors.accent : AppColors.accentMuted,
+                ),
+              ),
             ),
           ),
         );
@@ -371,7 +384,8 @@ class _HomeScreenState extends State<HomeScreen> {
     return GestureDetector(
       onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ExpenseCategoriesScreen())),
       child: Container(
-        width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 12),
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.border2)),
         child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
           Icon(Icons.tune_rounded, size: 15, color: AppColors.accentMuted),
@@ -411,6 +425,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildSectionLabel(String label) {
-    return Text(label.toUpperCase(), style: const TextStyle(fontSize: 10, letterSpacing: 1.2, color: AppColors.accentMuted, fontWeight: FontWeight.w600));
+    return Text(
+      label.toUpperCase(),
+      style: const TextStyle(fontSize: 10, letterSpacing: 1.2, color: AppColors.accentMuted, fontWeight: FontWeight.w600),
+    );
   }
 }
