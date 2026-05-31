@@ -6,6 +6,7 @@ import '../../utils/app_theme.dart';
 import '../screens/sourceIncome_screen.dart';
 import '../screens/expenseCategories_screen.dart';
 import '../screens/add_income_screen.dart';
+import '../screens/balance_screen.dart'; // ◄ NUEVA IMPORTACIÓN
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -60,9 +61,6 @@ class _HomeScreenState extends State<HomeScreen> {
       for (final d in incomesSnap.docs) {
         totalIn += (d.data()['amount'] as num? ?? 0).toDouble();
       }
-
-      // NOTA: Los gastos se muestran en su propia pantalla,
-      // no se descuentan del balance de ingresos.
 
       if (mounted) {
         setState(() {
@@ -259,11 +257,12 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildQuickActions() {
+    // MODIFICADO: Se cambió 'Reportes' por 'Balance' y se actualizó su Icono
     final actions = [
       {'icon': Icons.add_rounded, 'label': 'Ingreso'},
       {'icon': Icons.remove_rounded, 'label': 'Gasto'},
       {'icon': Icons.track_changes_rounded, 'label': 'Meta'},
-      {'icon': Icons.pie_chart_outline_rounded, 'label': 'Reportes'},
+      {'icon': Icons.account_balance_wallet_rounded, 'label': 'Balance'},
     ];
     return Row(
       children: actions.map((a) => Expanded(
@@ -286,6 +285,13 @@ class _HomeScreenState extends State<HomeScreen> {
           if (saved == true) _loadUserData();
         } else if (label == 'Gasto') {
           await Navigator.pushNamed(context, '/add-expense');
+        } else if (label == 'Balance') { // ◄ NUEVO ACCESO DESDE BOTÓN DE ACCIÓN rápido
+          await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const BalanceScreen()),
+          );
+          // Recargamos el home por si acaso al regresar se requiere refrescar estados locales
+          _loadUserData(); 
         }
       },
       child: Container(
@@ -416,7 +422,16 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _navItem(IconData icon, String label, int index) {
     final active = _selectedNav == index;
     return GestureDetector(
-      onTap: () => setState(() => _selectedNav = index),
+      onTap: () {
+        setState(() => _selectedNav = index);
+        // OPCIONAL: Si también quieres abrir balances desde el ícono de 'Análisis' de la barra inferior (index 3)
+        if (index == 3) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const BalanceScreen()),
+          );
+        }
+      },
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         Icon(icon, color: active ? AppColors.tealAccent : AppColors.accentDim),
         Text(label, style: TextStyle(fontSize: 9, color: active ? AppColors.tealAccent : AppColors.accentMuted)),
