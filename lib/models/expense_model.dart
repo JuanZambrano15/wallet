@@ -1,5 +1,3 @@
-// lib/models/expense_model.dart
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 enum ExpenseType { fixed, variable }
@@ -10,10 +8,10 @@ class Expense {
   final double amount;
   final DateTime date;
   final ExpenseType type;
-  final String categoryId; // Para gastos variables
+  final String categoryId; 
   final String name;
   final String description;
-  final DateTime? dueDate; // Solo para gastos fijos
+  final DateTime? dueDate; 
 
   Expense({
     required this.id,
