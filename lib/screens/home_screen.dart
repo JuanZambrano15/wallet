@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:wallet/services/balance_service.dart';
+import 'package:wallet/utils/balance_calculator.dart';
 import '../../utils/app_theme.dart';
 import '../screens/sourceIncome_screen.dart';
 import '../screens/expenseCategories_screen.dart';
 import '../screens/add_income_screen.dart';
-import '../screens/balance_screen.dart'; // ◄ NUEVA IMPORTACIÓN
+import '../screens/balance_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -20,8 +22,12 @@ class _HomeScreenState extends State<HomeScreen> {
   int _selectedPeriod = 0;
   final List<String> _periods = ['Este mes', 'Semana', 'Año'];
 
+  final BalanceService _balanceService = BalanceService();
+
   String _firstName = '';
   double _totalIncome = 0;
+  double _totalExpenses = 0;
+  double _availableBalance = 0;
   bool _loadingUserData = true;
 
   @override
@@ -51,20 +57,39 @@ class _HomeScreenState extends State<HomeScreen> {
         _firstName = rawName.trim().split(' ').first;
       }
 
-      // 2. Sumar ingresos
+      // 2. Calcular balance del periodo mensual usando BalanceService
+      final balance = await _balanceService.calculateAndSavePeriodBalance('mensual');
+      final range = BalanceCalculator.calculateDateRange('mensual');
+
+      // 3. Sumar ingresos del periodo
       final incomesSnap = await FirebaseFirestore.instance
           .collection('incomes')
           .where('userId', isEqualTo: uid)
+          .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(range.start))
+          .where('date', isLessThanOrEqualTo: Timestamp.fromDate(range.end))
           .get();
 
-      double totalIn = 0;
-      for (final d in incomesSnap.docs) {
-        totalIn += (d.data()['amount'] as num? ?? 0).toDouble();
-      }
+      double totalIn = incomesSnap.docs.fold(
+        0.0, (sum, d) => sum + ((d.data()['amount'] as num?) ?? 0).toDouble(),
+      );
+
+      // 4. Sumar gastos del periodo
+      final expensesSnap = await FirebaseFirestore.instance
+          .collection('expenses')
+          .where('userId', isEqualTo: uid)
+          .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(range.start))
+          .where('date', isLessThanOrEqualTo: Timestamp.fromDate(range.end))
+          .get();
+
+      double totalExp = expensesSnap.docs.fold(
+        0.0, (sum, d) => sum + ((d.data()['amount'] as num?) ?? 0).toDouble(),
+      );
 
       if (mounted) {
         setState(() {
           _totalIncome = totalIn;
+          _totalExpenses = totalExp;
+          _availableBalance = balance.amount; // ingresos - gastos del periodo
           _loadingUserData = false;
         });
       }
@@ -75,7 +100,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   String _formatCurrency(double amount) {
-    final parts = amount.toStringAsFixed(0).split('');
+    final parts = amount.abs().toStringAsFixed(0).split('');
     final buffer = StringBuffer();
     int count = 0;
     for (int i = parts.length - 1; i >= 0; i--) {
@@ -83,7 +108,8 @@ class _HomeScreenState extends State<HomeScreen> {
       buffer.write(parts[i]);
       count++;
     }
-    return '\$${buffer.toString().split('').reversed.join()}';
+    final formatted = buffer.toString().split('').reversed.join();
+    return amount < 0 ? '-\$$formatted' : '\$$formatted';
   }
 
   @override
@@ -206,6 +232,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildBalanceCard() {
+    final bool isPositive = _availableBalance >= 0;
+    final Color balanceColor = isPositive ? AppColors.tealAccent : AppColors.redAccent;
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
@@ -217,22 +246,41 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // ── Label superior ──────────────────────────────────────────
           const Text(
-            'TOTAL INGRESOS',
+            'BALANCE DISPONIBLE',
             style: TextStyle(fontSize: 10, letterSpacing: 1.5, color: AppColors.accentDim, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 6),
-          Text(
-            _loadingUserData ? '—' : _formatCurrency(_totalIncome),
-            style: const TextStyle(fontSize: 36, color: AppColors.accent, fontWeight: FontWeight.w300, letterSpacing: -1),
-          ),
+
+          // ── Monto principal ─────────────────────────────────────────
+          _loadingUserData
+              ? const Text('—', style: TextStyle(fontSize: 36, color: AppColors.accent, fontWeight: FontWeight.w300))
+              : Text(
+                  _formatCurrency(_availableBalance),
+                  style: TextStyle(
+                    fontSize: 36,
+                    color: balanceColor,
+                    fontWeight: FontWeight.w300,
+                    letterSpacing: -1,
+                  ),
+                ),
+
           const SizedBox(height: 14),
+
+          // ── Pills de ingresos y gastos ───────────────────────────────
           Row(
             children: [
               _statPill(
                 _loadingUserData ? '+\$—' : '+${_formatCurrency(_totalIncome)}',
                 Icons.arrow_upward_rounded,
                 isIncome: true,
+              ),
+              const SizedBox(width: 8),
+              _statPill(
+                _loadingUserData ? '-\$—' : '-${_formatCurrency(_totalExpenses)}',
+                Icons.arrow_downward_rounded,
+                isIncome: false,
               ),
             ],
           ),
@@ -245,7 +293,10 @@ class _HomeScreenState extends State<HomeScreen> {
     final color = isIncome ? AppColors.tealAccent : AppColors.redAccent;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(color: Colors.white.withOpacity(0.08), borderRadius: BorderRadius.circular(20)),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(20),
+      ),
       child: Row(
         children: [
           Icon(icon, size: 13, color: color),
@@ -257,7 +308,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildQuickActions() {
-    // MODIFICADO: Se cambió 'Reportes' por 'Balance' y se actualizó su Icono
     final actions = [
       {'icon': Icons.add_rounded, 'label': 'Ingreso'},
       {'icon': Icons.remove_rounded, 'label': 'Gasto'},
@@ -284,14 +334,14 @@ class _HomeScreenState extends State<HomeScreen> {
           );
           if (saved == true) _loadUserData();
         } else if (label == 'Gasto') {
-          await Navigator.pushNamed(context, '/add-expense');
-        } else if (label == 'Balance') { // ◄ NUEVO ACCESO DESDE BOTÓN DE ACCIÓN rápido
+          final saved = await Navigator.pushNamed(context, '/add-expense');
+          if (saved == true) _loadUserData(); // ← recarga balance al volver
+        } else if (label == 'Balance') {
           await Navigator.push(
             context,
             MaterialPageRoute(builder: (_) => const BalanceScreen()),
           );
-          // Recargamos el home por si acaso al regresar se requiere refrescar estados locales
-          _loadUserData(); 
+          _loadUserData();
         }
       },
       child: Container(
@@ -361,7 +411,10 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 14),
-            decoration: BoxDecoration(borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.border2)),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.border2),
+            ),
             child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
               Icon(Icons.add_circle_outline_rounded, size: 16, color: AppColors.accentMuted),
               SizedBox(width: 6),
@@ -376,7 +429,11 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _sourceItem(Map<String, dynamic> source) {
     return Container(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.border)),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border),
+      ),
       child: Row(children: [
         Icon(source['icon'] as IconData, color: AppColors.tealAccent),
         const SizedBox(width: 12),
@@ -392,7 +449,10 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.border2)),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.border2),
+        ),
         child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
           Icon(Icons.tune_rounded, size: 15, color: AppColors.accentMuted),
           SizedBox(width: 6),
@@ -405,7 +465,10 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildBottomNav() {
     return Container(
       padding: const EdgeInsets.only(top: 10, bottom: 24, left: 10, right: 10),
-      decoration: const BoxDecoration(color: AppColors.surface, border: Border(top: BorderSide(color: AppColors.border))),
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        border: Border(top: BorderSide(color: AppColors.border)),
+      ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
@@ -424,7 +487,6 @@ class _HomeScreenState extends State<HomeScreen> {
     return GestureDetector(
       onTap: () {
         setState(() => _selectedNav = index);
-        // OPCIONAL: Si también quieres abrir balances desde el ícono de 'Análisis' de la barra inferior (index 3)
         if (index == 3) {
           Navigator.push(
             context,

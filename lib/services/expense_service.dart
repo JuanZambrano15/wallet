@@ -2,11 +2,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/expense_model.dart' hide ExpenseCategory;
 import '../models/expenseCategories.dart';
-import '../services/expenseCategories.service.dart'; // ← agregar este import
+import '../services/expenseCategories.service.dart';
 
 class ExpenseService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
-  final ExpenseCategoryService _categoryService = ExpenseCategoryService(); // ← agregar
+  final ExpenseCategoryService _categoryService = ExpenseCategoryService();
 
   CollectionReference get _expensesCol => _db.collection('expenses');
 
@@ -101,10 +101,8 @@ class ExpenseService {
 
   // ─── Categorías ───────────────────────────────────────────────────────────
 
-  /// Retorna las categorías del sistema + las personalizadas del usuario.
-  /// Delega a ExpenseCategoryService para mantener una sola fuente de verdad.
   Future<List<ExpenseCategory>> getCategoriesByUser() async {
-    return _categoryService.getAllCategories(); // ← sistema + personalizadas
+    return _categoryService.getAllCategories();
   }
 
   Future<ExpenseCategory> addCustomCategory({
@@ -120,6 +118,57 @@ class ExpenseService {
   }
 
   Future<void> deleteCustomCategory(String id) async {
-    await _categoryService.deleteCategory(id); // ← protege sys_ automáticamente
+    await _categoryService.deleteCategory(id);
+  }
+
+  // ─── Balance ──────────────────────────────────────────────────────────────
+
+  /// Retorna el balance disponible: total ingresos - total gastos del usuario.
+  Future<double> getAvailableBalance() async {
+    final userId = await _getCurrentUserId();
+
+    final expensesSnap = await _expensesCol
+        .where('userId', isEqualTo: userId)
+        .get();
+
+    final totalExpenses = expensesSnap.docs.fold<double>(0, (sum, doc) {
+      final data = doc.data() as Map<String, dynamic>;
+      return sum + ((data['amount'] as num?) ?? 0).toDouble();
+    });
+
+    final incomesSnap = await _db
+        .collection('incomes')
+        .where('userId', isEqualTo: userId)
+        .get();
+
+    final totalIncomes = incomesSnap.docs.fold<double>(0, (sum, doc) {
+      final data = doc.data() as Map<String, dynamic>;
+      return sum + ((data['amount'] as num?) ?? 0).toDouble();
+    });
+
+    return totalIncomes - totalExpenses;
+  }
+
+  /// Stream del balance en tiempo real.
+  Stream<double> streamAvailableBalance(String userId) {
+    final incomesStream = _db
+        .collection('incomes')
+        .where('userId', isEqualTo: userId)
+        .snapshots()
+        .map((snap) => snap.docs.fold<double>(0, (sum, doc) {
+              final data = doc.data() as Map<String, dynamic>;
+              return sum + ((data['amount'] as num?) ?? 0).toDouble();
+            }));
+
+    return incomesStream.asyncMap((incomes) async {
+      final expensesSnap = await _expensesCol
+          .where('userId', isEqualTo: userId)
+          .get();
+      final expenses = expensesSnap.docs.fold<double>(0, (sum, doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        return sum + ((data['amount'] as num?) ?? 0).toDouble();
+      });
+      return incomes - expenses;
+    });
   }
 }
