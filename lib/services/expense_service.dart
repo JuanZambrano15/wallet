@@ -1,14 +1,14 @@
-// lib/services/expense_service.dart
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../models/expense_model.dart';
+import '../models/expense_model.dart' hide ExpenseCategory;
+import '../models/expenseCategories.dart';
+import '../services/expenseCategories.service.dart';
 
 class ExpenseService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
+  final ExpenseCategoryService _categoryService = ExpenseCategoryService();
 
   CollectionReference get _expensesCol => _db.collection('expenses');
-  CollectionReference get _categoriesCol => _db.collection('expense_categories');
 
   // ─── Auth helper ─────────────────────────────────────────────────────────
 
@@ -101,40 +101,74 @@ class ExpenseService {
 
   // ─── Categorías ───────────────────────────────────────────────────────────
 
-  /// Retorna las categorías del sistema + las personalizadas del usuario.
   Future<List<ExpenseCategory>> getCategoriesByUser() async {
-    final userId = await _getCurrentUserId();
-
-    // Categorías personalizadas guardadas en Firestore
-    final snapshot = await _categoriesCol
-        .where('userId', isEqualTo: userId)
-        .where('isDefault', isEqualTo: false)
-        .get();
-
-    final custom = snapshot.docs
-        .map((doc) => ExpenseCategory.fromMap(doc.data() as Map<String, dynamic>))
-        .toList();
-
-    // Combinar: primero las predeterminadas, luego las personalizadas
-    return [...ExpenseCategory.defaults(userId), ...custom];
+    return _categoryService.getAllCategories();
   }
 
-  Future<ExpenseCategory> addCustomCategory(String name) async {
-    final userId = await _getCurrentUserId();
-
-    final docRef = _categoriesCol.doc();
-    final category = ExpenseCategory(
-      id: docRef.id,
-      userId: userId,
-      name: name.trim(),
-      isDefault: false,
+  Future<ExpenseCategory> addCustomCategory({
+    required String name,
+    required String emoji,
+    String description = '',
+  }) async {
+    return _categoryService.createCategory(
+      name: name,
+      emoji: emoji,
+      description: description,
     );
-
-    await docRef.set(category.toMap());
-    return category;
   }
 
   Future<void> deleteCustomCategory(String id) async {
-    await _categoriesCol.doc(id).delete();
+    await _categoryService.deleteCategory(id);
+  }
+
+  // ─── Balance ──────────────────────────────────────────────────────────────
+
+  /// Retorna el balance disponible: total ingresos - total gastos del usuario.
+  Future<double> getAvailableBalance() async {
+    final userId = await _getCurrentUserId();
+
+    final expensesSnap = await _expensesCol
+        .where('userId', isEqualTo: userId)
+        .get();
+
+    final totalExpenses = expensesSnap.docs.fold<double>(0, (sum, doc) {
+      final data = doc.data() as Map<String, dynamic>;
+      return sum + ((data['amount'] as num?) ?? 0).toDouble();
+    });
+
+    final incomesSnap = await _db
+        .collection('incomes')
+        .where('userId', isEqualTo: userId)
+        .get();
+
+    final totalIncomes = incomesSnap.docs.fold<double>(0, (sum, doc) {
+      final data = doc.data() as Map<String, dynamic>;
+      return sum + ((data['amount'] as num?) ?? 0).toDouble();
+    });
+
+    return totalIncomes - totalExpenses;
+  }
+
+  /// Stream del balance en tiempo real.
+  Stream<double> streamAvailableBalance(String userId) {
+    final incomesStream = _db
+        .collection('incomes')
+        .where('userId', isEqualTo: userId)
+        .snapshots()
+        .map((snap) => snap.docs.fold<double>(0, (sum, doc) {
+              final data = doc.data() as Map<String, dynamic>;
+              return sum + ((data['amount'] as num?) ?? 0).toDouble();
+            }));
+
+    return incomesStream.asyncMap((incomes) async {
+      final expensesSnap = await _expensesCol
+          .where('userId', isEqualTo: userId)
+          .get();
+      final expenses = expensesSnap.docs.fold<double>(0, (sum, doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        return sum + ((data['amount'] as num?) ?? 0).toDouble();
+      });
+      return incomes - expenses;
+    });
   }
 }

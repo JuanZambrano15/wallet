@@ -4,11 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../../utils/app_theme.dart';
-import '../../models/expense_model.dart';
+import '../../models/expense_model.dart' hide ExpenseCategory;
+import '../../models/expenseCategories.dart';
 import '../../services/expense_service.dart';
 
 class AddExpenseScreen extends StatefulWidget {
-  /// Si se pasa un [expense], el formulario entra en modo edición.
   final Expense? expense;
 
   const AddExpenseScreen({super.key, this.expense});
@@ -21,13 +21,11 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   final _formKey = GlobalKey<FormState>();
   final _service = ExpenseService();
 
-  // Controladores
   final _nameCtrl = TextEditingController();
   final _amountCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
   final _newCatCtrl = TextEditingController();
 
-  // Estado del formulario
   ExpenseType _type = ExpenseType.variable;
   String? _selectedCategoryId;
   DateTime _date = DateTime.now();
@@ -63,7 +61,6 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       if (mounted) {
         setState(() {
           _categories = cats;
-          // Seleccionar la primera categoría por defecto si no hay una ya seleccionada
           if (_selectedCategoryId == null && cats.isNotEmpty) {
             _selectedCategoryId = cats.first.id;
           }
@@ -111,7 +108,10 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface2,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Nueva categoría', style: TextStyle(color: AppColors.accent, fontSize: 16, fontWeight: FontWeight.w600)),
+        title: const Text(
+          'Nueva categoría',
+          style: TextStyle(color: AppColors.accent, fontSize: 16, fontWeight: FontWeight.w600),
+        ),
         content: TextField(
           controller: _newCatCtrl,
           autofocus: true,
@@ -130,7 +130,10 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
               if (name.isEmpty) return;
               Navigator.pop(ctx);
               try {
-                final newCat = await _service.addCustomCategory(name);
+                final newCat = await _service.addCustomCategory(
+                  name: name,
+                  emoji: '📦',
+                );
                 if (mounted) {
                   setState(() {
                     _categories.add(newCat);
@@ -195,7 +198,10 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface2,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Eliminar gasto', style: TextStyle(color: AppColors.accent, fontSize: 16, fontWeight: FontWeight.w600)),
+        title: const Text(
+          'Eliminar gasto',
+          style: TextStyle(color: AppColors.accent, fontSize: 16, fontWeight: FontWeight.w600),
+        ),
         content: const Text(
           '¿Estás seguro de que deseas eliminar este gasto? Esta acción no se puede deshacer.',
           style: TextStyle(color: AppColors.accentDim, fontSize: 13, height: 1.5),
@@ -235,8 +241,6 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     _newCatCtrl.dispose();
     super.dispose();
   }
-
-  // ─── UI ───────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -287,7 +291,8 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                         hintText: 'Ej. Netflix, Arriendo...',
                         prefixIcon: Icon(Icons.label_outline_rounded),
                       ),
-                      validator: (v) => (v == null || v.trim().isEmpty) ? 'El nombre es obligatorio' : null,
+                      validator: (v) =>
+                          (v == null || v.trim().isEmpty) ? 'El nombre es obligatorio' : null,
                     ),
                     const SizedBox(height: 20),
 
@@ -312,28 +317,29 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                     ),
                     const SizedBox(height: 20),
 
-                    // ── Categoría (solo variable) ──────────────────────────
-                    if (_type == ExpenseType.variable) ...[
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          _sectionLabel('Categoría *'),
-                          GestureDetector(
-                            onTap: _showAddCategoryDialog,
-                            child: const Row(
-                              children: [
-                                Icon(Icons.add_circle_outline_rounded, size: 14, color: AppColors.tealAccent),
-                                SizedBox(width: 4),
-                                Text('Nueva', style: TextStyle(fontSize: 11, color: AppColors.tealAccent, fontWeight: FontWeight.w600)),
-                              ],
-                            ),
+                    // ── Categoría (fijo y variable) ────────────────────────
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        _sectionLabel('Categoría *'),
+                        GestureDetector(
+                          onTap: _showAddCategoryDialog,
+                          child: const Row(
+                            children: [
+                              Icon(Icons.add_circle_outline_rounded, size: 14, color: AppColors.tealAccent),
+                              SizedBox(width: 4),
+                              Text(
+                                'Nueva',
+                                style: TextStyle(fontSize: 11, color: AppColors.tealAccent, fontWeight: FontWeight.w600),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      _buildCategoryGrid(),
-                      const SizedBox(height: 20),
-                    ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    _buildCategoryGrid(),
+                    const SizedBox(height: 20),
 
                     // ── Fecha del gasto ────────────────────────────────────
                     _sectionLabel('Fecha del gasto'),
@@ -388,8 +394,12 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                         onPressed: _saving ? null : _save,
                         child: _saving
                             ? const SizedBox(
-                                width: 20, height: 20,
-                                child: CircularProgressIndicator(color: AppColors.accent, strokeWidth: 2),
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  color: AppColors.accent,
+                                  strokeWidth: 2,
+                                ),
                               )
                             : Text(_isEditing ? 'Guardar cambios' : 'Registrar gasto'),
                       ),
@@ -404,8 +414,15 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   // ─── Helpers de UI ────────────────────────────────────────────────────────
 
   Widget _sectionLabel(String label) {
-    return Text(label.toUpperCase(),
-        style: const TextStyle(fontSize: 10, letterSpacing: 1.2, color: AppColors.accentMuted, fontWeight: FontWeight.w600));
+    return Text(
+      label.toUpperCase(),
+      style: const TextStyle(
+        fontSize: 10,
+        letterSpacing: 1.2,
+        color: AppColors.accentMuted,
+        fontWeight: FontWeight.w600,
+      ),
+    );
   }
 
   Widget _buildTypeToggle() {
@@ -424,11 +441,9 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       child: GestureDetector(
         onTap: () => setState(() {
           _type = type;
-          // Limpiar categoría si cambia a fijo (usa 'fixed' como id neutral)
-          if (type == ExpenseType.fixed) {
-            _selectedCategoryId = 'fixed';
-          } else {
-            _selectedCategoryId = _categories.isNotEmpty ? _categories.first.id : null;
+          // ← mantiene la categoría seleccionada al cambiar de tipo
+          if (_selectedCategoryId == null && _categories.isNotEmpty) {
+            _selectedCategoryId = _categories.first.id;
           }
         }),
         child: AnimatedContainer(
@@ -444,12 +459,14 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
             children: [
               Icon(icon, size: 16, color: active ? AppColors.tealAccent : AppColors.accentDim),
               const SizedBox(width: 8),
-              Text(label,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: active ? AppColors.accent : AppColors.accentDim,
-                  )),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: active ? AppColors.accent : AppColors.accentDim,
+                ),
+              ),
             ],
           ),
         ),
@@ -472,10 +489,12 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
               decoration: BoxDecoration(
                 color: active ? AppColors.primary : AppColors.surface,
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: active ? AppColors.primary : AppColors.border2),
+                border: Border.all(
+                  color: active ? AppColors.primary : AppColors.border2,
+                ),
               ),
               child: Text(
-                cat.name,
+                '${cat.emoji}  ${cat.name}',
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w500,

@@ -110,12 +110,4 @@ class ExpenseCategory {
         isDefault: map['isDefault'] as bool? ?? false,
       );
 
-  // Categorías predefinidas del sistema
-  static List<ExpenseCategory> defaults(String userId) => [
-        ExpenseCategory(id: 'food', userId: userId, name: 'Alimentación', isDefault: true),
-        ExpenseCategory(id: 'transport', userId: userId, name: 'Transporte', isDefault: true),
-        ExpenseCategory(id: 'entertainment', userId: userId, name: 'Entretenimiento', isDefault: true),
-        ExpenseCategory(id: 'health', userId: userId, name: 'Salud', isDefault: true),
-        ExpenseCategory(id: 'education', userId: userId, name: 'Educación', isDefault: true),
-      ];
 }
