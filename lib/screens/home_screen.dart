@@ -58,31 +58,41 @@ class _HomeScreenState extends State<HomeScreen> {
       }
 
       // 2. Calcular balance del periodo mensual usando BalanceService
-      final balance = await _balanceService.calculateAndSavePeriodBalance('mensual');
+      final balance = await _balanceService.calculateAndSavePeriodBalance(
+        'mensual',
+      );
       final range = BalanceCalculator.calculateDateRange('mensual');
 
       // 3. Sumar ingresos del periodo
       final incomesSnap = await FirebaseFirestore.instance
           .collection('incomes')
           .where('userId', isEqualTo: uid)
-          .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(range.start))
+          .where(
+            'date',
+            isGreaterThanOrEqualTo: Timestamp.fromDate(range.start),
+          )
           .where('date', isLessThanOrEqualTo: Timestamp.fromDate(range.end))
           .get();
 
       double totalIn = incomesSnap.docs.fold(
-        0.0, (sum, d) => sum + ((d.data()['amount'] as num?) ?? 0).toDouble(),
+        0.0,
+        (sum, d) => sum + ((d.data()['amount'] as num?) ?? 0).toDouble(),
       );
 
       // 4. Sumar gastos del periodo
       final expensesSnap = await FirebaseFirestore.instance
           .collection('expenses')
           .where('userId', isEqualTo: uid)
-          .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(range.start))
+          .where(
+            'date',
+            isGreaterThanOrEqualTo: Timestamp.fromDate(range.start),
+          )
           .where('date', isLessThanOrEqualTo: Timestamp.fromDate(range.end))
           .get();
 
       double totalExp = expensesSnap.docs.fold(
-        0.0, (sum, d) => sum + ((d.data()['amount'] as num?) ?? 0).toDouble(),
+        0.0,
+        (sum, d) => sum + ((d.data()['amount'] as num?) ?? 0).toDouble(),
       );
 
       if (mounted) {
@@ -124,46 +134,43 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
-        child: Stack(
-          children: [
-            SingleChildScrollView(
-              padding: const EdgeInsets.only(bottom: 100),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildTopBar(),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildGreeting(),
-                        const SizedBox(height: 16),
-                        _buildBalanceCard(),
-                        const SizedBox(height: 20),
-                        _buildSectionLabel('Acciones'),
-                        const SizedBox(height: 10),
-                        _buildQuickActions(),
-                        const SizedBox(height: 20),
-                        _buildPeriodSelector(),
-                        const SizedBox(height: 20),
-                        _buildSectionLabel('Fuentes de ingreso'),
-                        const SizedBox(height: 10),
-                        _buildSourcesList(),
-                        const SizedBox(height: 20),
-                        _buildSectionLabel('Categorías de gasto'),
-                        const SizedBox(height: 10),
-                        _buildCategoriesWidget(),
-                      ],
-                    ),
-                  ),
-                ],
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.only(bottom: 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildTopBar(),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildGreeting(),
+                    const SizedBox(height: 16),
+                    _buildBalanceCard(),
+                    const SizedBox(height: 20),
+                    _buildSectionLabel('Acciones'),
+                    const SizedBox(height: 10),
+                    _buildQuickActions(),
+                    const SizedBox(height: 20),
+                    _buildPeriodSelector(),
+                    const SizedBox(height: 20),
+                    _buildSectionLabel('Fuentes de ingreso'),
+                    const SizedBox(height: 10),
+                    _buildSourcesList(),
+                    const SizedBox(height: 20),
+                    _buildSectionLabel('Categorías de gasto'),
+                    const SizedBox(height: 10),
+                    _buildCategoriesWidget(),
+                    const SizedBox(height: 16),
+                  ],
+                ),
               ),
-            ),
-            Positioned(bottom: 0, left: 0, right: 0, child: _buildBottomNav()),
-          ],
+            ],
+          ),
         ),
       ),
+      bottomNavigationBar: _buildBottomNav(),
     );
   }
 
@@ -173,16 +180,29 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Row(
         children: [
           Container(
-            width: 36, height: 36,
+            width: 36,
+            height: 36,
             decoration: BoxDecoration(
               color: AppColors.primary,
               borderRadius: BorderRadius.circular(10),
               border: Border.all(color: AppColors.border),
             ),
-            child: const Icon(Icons.bar_chart_rounded, color: AppColors.accent, size: 20),
+            child: const Icon(
+              Icons.bar_chart_rounded,
+              color: AppColors.accent,
+              size: 20,
+            ),
           ),
           const SizedBox(width: 10),
-          const Text('KAIRO', style: TextStyle(fontSize: 20, color: AppColors.accent, letterSpacing: 2.5, fontWeight: FontWeight.w700)),
+          const Text(
+            'KAIRO',
+            style: TextStyle(
+              fontSize: 20,
+              color: AppColors.accent,
+              letterSpacing: 2.5,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
           const Spacer(),
           _notificationIcon(),
         ],
@@ -194,18 +214,25 @@ class _HomeScreenState extends State<HomeScreen> {
     return Stack(
       children: [
         Container(
-          width: 38, height: 38,
+          width: 38,
+          height: 38,
           decoration: BoxDecoration(
             color: AppColors.surface,
             borderRadius: BorderRadius.circular(11),
             border: Border.all(color: AppColors.border),
           ),
-          child: const Icon(Icons.notifications_none_rounded, color: AppColors.accentDim, size: 20),
+          child: const Icon(
+            Icons.notifications_none_rounded,
+            color: AppColors.accentDim,
+            size: 20,
+          ),
         ),
         Positioned(
-          top: 8, right: 8,
+          top: 8,
+          right: 8,
           child: Container(
-            width: 7, height: 7,
+            width: 7,
+            height: 7,
             decoration: BoxDecoration(
               color: AppColors.accent,
               shape: BoxShape.circle,
@@ -221,11 +248,25 @@ class _HomeScreenState extends State<HomeScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('HOY', style: TextStyle(fontSize: 10, letterSpacing: 1.2, color: AppColors.accentMuted, fontWeight: FontWeight.w600)),
+        const Text(
+          'HOY',
+          style: TextStyle(
+            fontSize: 10,
+            letterSpacing: 1.2,
+            color: AppColors.accentMuted,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
         const SizedBox(height: 4),
         Text(
-          _loadingUserData ? 'Cargando...' : 'Hola, ${_firstName.isNotEmpty ? _firstName : 'Usuario'} 👋',
-          style: const TextStyle(fontSize: 22, color: AppColors.accent, fontWeight: FontWeight.w400),
+          _loadingUserData
+              ? 'Cargando...'
+              : 'Hola, ${_firstName.isNotEmpty ? _firstName : 'Usuario'} 👋',
+          style: const TextStyle(
+            fontSize: 22,
+            color: AppColors.accent,
+            fontWeight: FontWeight.w400,
+          ),
         ),
       ],
     );
@@ -233,7 +274,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildBalanceCard() {
     final bool isPositive = _availableBalance >= 0;
-    final Color balanceColor = isPositive ? AppColors.tealAccent : AppColors.redAccent;
+    final Color balanceColor = isPositive
+        ? AppColors.tealAccent
+        : AppColors.redAccent;
 
     return Container(
       width: double.infinity,
@@ -249,13 +292,25 @@ class _HomeScreenState extends State<HomeScreen> {
           // ── Label superior ──────────────────────────────────────────
           const Text(
             'BALANCE DISPONIBLE',
-            style: TextStyle(fontSize: 10, letterSpacing: 1.5, color: AppColors.accentDim, fontWeight: FontWeight.w600),
+            style: TextStyle(
+              fontSize: 10,
+              letterSpacing: 1.5,
+              color: AppColors.accentDim,
+              fontWeight: FontWeight.w600,
+            ),
           ),
           const SizedBox(height: 6),
 
           // ── Monto principal ─────────────────────────────────────────
           _loadingUserData
-              ? const Text('—', style: TextStyle(fontSize: 36, color: AppColors.accent, fontWeight: FontWeight.w300))
+              ? const Text(
+                  '—',
+                  style: TextStyle(
+                    fontSize: 36,
+                    color: AppColors.accent,
+                    fontWeight: FontWeight.w300,
+                  ),
+                )
               : Text(
                   _formatCurrency(_availableBalance),
                   style: TextStyle(
@@ -278,7 +333,9 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               const SizedBox(width: 8),
               _statPill(
-                _loadingUserData ? '-\$—' : '-${_formatCurrency(_totalExpenses)}',
+                _loadingUserData
+                    ? '-\$—'
+                    : '-${_formatCurrency(_totalExpenses)}',
                 Icons.arrow_downward_rounded,
                 isIncome: false,
               ),
@@ -301,7 +358,14 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           Icon(icon, size: 13, color: color),
           const SizedBox(width: 4),
-          Text(amount, style: TextStyle(fontSize: 12, color: color, fontWeight: FontWeight.w600)),
+          Text(
+            amount,
+            style: TextStyle(
+              fontSize: 12,
+              color: color,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ],
       ),
     );
@@ -315,12 +379,16 @@ class _HomeScreenState extends State<HomeScreen> {
       {'icon': Icons.account_balance_wallet_rounded, 'label': 'Balance'},
     ];
     return Row(
-      children: actions.map((a) => Expanded(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 3),
-          child: _actionBtn(a['icon'] as IconData, a['label'] as String),
-        ),
-      )).toList(),
+      children: actions
+          .map(
+            (a) => Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 3),
+                child: _actionBtn(a['icon'] as IconData, a['label'] as String),
+              ),
+            ),
+          )
+          .toList(),
     );
   }
 
@@ -354,7 +422,8 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           children: [
             Container(
-              width: 36, height: 36,
+              width: 36,
+              height: 36,
               decoration: BoxDecoration(
                 color: AppColors.primary.withOpacity(0.4),
                 borderRadius: BorderRadius.circular(10),
@@ -363,7 +432,14 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Icon(icon, size: 18, color: AppColors.tealAccent),
             ),
             const SizedBox(height: 6),
-            Text(label, style: const TextStyle(fontSize: 10, color: AppColors.accentDim, fontWeight: FontWeight.w500)),
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 10,
+                color: AppColors.accentDim,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
           ],
         ),
       ),
@@ -384,7 +460,9 @@ class _HomeScreenState extends State<HomeScreen> {
               decoration: BoxDecoration(
                 color: active ? AppColors.primary : Colors.transparent,
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: active ? AppColors.primary : AppColors.border),
+                border: Border.all(
+                  color: active ? AppColors.primary : AppColors.border,
+                ),
               ),
               child: Text(
                 e.value,
@@ -404,10 +482,17 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildSourcesList() {
     return Column(
       children: [
-        _sourceItem({'icon': Icons.work_outline_rounded, 'name': 'Salario', 'amount': 'Actualizado'}),
+        _sourceItem({
+          'icon': Icons.work_outline_rounded,
+          'name': 'Salario',
+          'amount': 'Actualizado',
+        }),
         const SizedBox(height: 8),
         GestureDetector(
-          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const IncomeSourcesScreen())),
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const IncomeSourcesScreen()),
+          ),
           child: Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 14),
@@ -415,11 +500,25 @@ class _HomeScreenState extends State<HomeScreen> {
               borderRadius: BorderRadius.circular(14),
               border: Border.all(color: AppColors.border2),
             ),
-            child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-              Icon(Icons.add_circle_outline_rounded, size: 16, color: AppColors.accentMuted),
-              SizedBox(width: 6),
-              Text('Agregar fuente', style: TextStyle(fontSize: 12, color: AppColors.accentMuted, fontWeight: FontWeight.w500)),
-            ]),
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.add_circle_outline_rounded,
+                  size: 16,
+                  color: AppColors.accentMuted,
+                ),
+                SizedBox(width: 6),
+                Text(
+                  'Agregar fuente',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppColors.accentMuted,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ],
@@ -434,18 +533,37 @@ class _HomeScreenState extends State<HomeScreen> {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: AppColors.border),
       ),
-      child: Row(children: [
-        Icon(source['icon'] as IconData, color: AppColors.tealAccent),
-        const SizedBox(width: 12),
-        Expanded(child: Text(source['name']!, style: const TextStyle(color: AppColors.accent, fontWeight: FontWeight.w500))),
-        Text(source['amount']!, style: const TextStyle(color: AppColors.tealAccent, fontWeight: FontWeight.w600)),
-      ]),
+      child: Row(
+        children: [
+          Icon(source['icon'] as IconData, color: AppColors.tealAccent),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              source['name']!,
+              style: const TextStyle(
+                color: AppColors.accent,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          Text(
+            source['amount']!,
+            style: const TextStyle(
+              color: AppColors.tealAccent,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildCategoriesWidget() {
     return GestureDetector(
-      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ExpenseCategoriesScreen())),
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const ExpenseCategoriesScreen()),
+      ),
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 12),
@@ -453,18 +571,28 @@ class _HomeScreenState extends State<HomeScreen> {
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: AppColors.border2),
         ),
-        child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Icon(Icons.tune_rounded, size: 15, color: AppColors.accentMuted),
-          SizedBox(width: 6),
-          Text('Gestionar categorías', style: TextStyle(fontSize: 12, color: AppColors.accentMuted, fontWeight: FontWeight.w500)),
-        ]),
+        child: const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.tune_rounded, size: 15, color: AppColors.accentMuted),
+            SizedBox(width: 6),
+            Text(
+              'Gestionar categorías',
+              style: TextStyle(
+                fontSize: 12,
+                color: AppColors.accentMuted,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildBottomNav() {
     return Container(
-      padding: const EdgeInsets.only(top: 10, bottom: 24, left: 10, right: 10),
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
       decoration: const BoxDecoration(
         color: AppColors.surface,
         border: Border(top: BorderSide(color: AppColors.border)),
@@ -494,17 +622,34 @@ class _HomeScreenState extends State<HomeScreen> {
           );
         }
       },
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Icon(icon, color: active ? AppColors.tealAccent : AppColors.accentDim),
-        Text(label, style: TextStyle(fontSize: 9, color: active ? AppColors.tealAccent : AppColors.accentMuted)),
-      ]),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            color: active ? AppColors.tealAccent : AppColors.accentDim,
+          ),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 9,
+              color: active ? AppColors.tealAccent : AppColors.accentMuted,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildSectionLabel(String label) {
     return Text(
       label.toUpperCase(),
-      style: const TextStyle(fontSize: 10, letterSpacing: 1.2, color: AppColors.accentMuted, fontWeight: FontWeight.w600),
+      style: const TextStyle(
+        fontSize: 10,
+        letterSpacing: 1.2,
+        color: AppColors.accentMuted,
+        fontWeight: FontWeight.w600,
+      ),
     );
   }
 }
